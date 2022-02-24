@@ -1,2 +1,3 @@
 *.egg-info
 data
+scripts/findEmptyAudios.py
