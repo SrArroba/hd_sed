@@ -1,4 +1,5 @@
 import os 
+import sys
 import pandas as pd
 import numpy as np
 import librosa
@@ -6,18 +7,29 @@ import matplotlib.pyplot as plt
 import math 
 import seaborn as sns
 
+def getFileID(fileName):
+    fileSplit = fileName[:-4].split("/") # Remove .csv and split in subfolders
+    fileID = fileSplit[len(fileSplit)-1] # Remove the rest, keep only numbers(ID)
+    return fileID
+
+# Arguments:
+# 0.- .py file name 
+# 1.- Audio final folder
+# 2.- Annotations final folder
+argAudio = sys.argv[1]
+argAnnot = sys.argv[2]
+
 # Paths 
-annotationsFolder = os.path.expanduser("../data/nips4b/annotations/")
+annotationsFolder = os.path.expanduser("../data/nips4b/"+argAnnot)
 annotationList = os.listdir(annotationsFolder)
-audioFolder = os.path.expanduser("../data/nips4b/audio/original/train/")
+audioFolder = os.path.expanduser("../data/nips4b/audio/"+argAudio)
 
 # Data frame building
 columnNames = ['Start','Duration', 'Label']
 
 # Iterate each annotation file
 for annotationFile in annotationList:
-    fileID = annotationFile.replace("annotation_train", "")
-    fileID = fileID.replace(".csv", "")
+    fileID = getFileID(annotationFile)
 
     annotFile = os.path.join(annotationsFolder, annotationFile)
     df = pd.read_csv(annotFile, names = columnNames)
@@ -35,7 +47,7 @@ for annotationFile in annotationList:
         megaList.append(listTime)
 
     ###################################################
-    audioFile = "nips4b_birds_trainfile"+fileID+".wav"
+    audioFile = fileID+".wav"
     audioFile = os.path.join(audioFolder, audioFile)
     # Check duration of file 
     duration = librosa.get_duration(filename=audioFile) +0.01
@@ -101,7 +113,7 @@ for annotationFile in annotationList:
         if (len(events) > maxOverlap): maxOverlap = len(events)
 
         colIndex += 1
-    print("\nOverlapping study of audio file {:d}: ".format(int(fileID)))
+    print("\nOverlapping study of audio file {:s}: ".format(fileID))
     print("Appearing species: ", len(allLabels), "(", allLabels,")")
     print("Is there overlapping? ", overlap)
     print("Maximum overlapping: ", maxOverlap)
