@@ -21,7 +21,7 @@ def concatSeveralCSV(csvList, positionList):
 
     # Create csv in folder
     targetCSV = outAnnotFolder+csvName
-    concatCSV = open(targetCSV, "a+")
+    concatCSV = open(targetCSV, "w")
 
     # Fill the new CSV with the rows in the csvList 
     for i in range(len(csvList)):
@@ -79,19 +79,16 @@ stdDuration = 5
 # FILES TO BE MERGED
 csvList = [annotFolder+"125.csv", annotFolder+"297.csv", annotFolder+"377.csv"]
 audioList = [audioFolder+"125.wav", audioFolder+"297.wav", audioFolder+"377.wav"]
-positions = [0,0,0]
+posList = [0,0,0]
 
 csvPath = concatSeveralCSV(csvList, posList)
+audioPath = mergeAudios(audioList, posList)
 
-# DATA FRAMES
-df1 = getCSV_DF(annot1)
-df2 = getCSV_DF(annot2)
-dfConcat = getCSV_DF(concatPath)
+# DATA FRAMES PRINTS
+for i in csvList:
+    df = getCSV_DF(i)
+    print("\n",df)
 
-print(df1)
-print(df2)
-print(dfConcat)
+dfConcat = getCSV_DF(outAnnotFolder+csvPath)
 
-finalPath = outAudioFolder+concatCSV[:-4]+".wav"
-file_handle = overlayAudio.export(finalPath, format="wav")
-
+print("\n",dfConcat)

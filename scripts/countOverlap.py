@@ -113,6 +113,7 @@ for annotationFile in annotationList:
         if (len(events) > maxOverlap): maxOverlap = len(events)
 
         colIndex += 1
+        
     print("\nOverlapping study of audio file {:s}: ".format(fileID))
     print("Appearing species: ", len(allLabels), "(", allLabels,")")
     print("Is there overlapping? ", overlap)
