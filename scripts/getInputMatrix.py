@@ -5,9 +5,14 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+def getCSV_DF(csvFile):
+    columnNames = ['Start','Duration', 'Label']
+    df = pd.read_csv(csvFile, names = columnNames)
+    return df
+
 
 #############################################################################
-csvFile = "../data/nips4b/mergedAnnotations/125_297_377.csv"
+csvFile = "../data/nips4b/annotations/612.csv"
 #############################################################################
 
 # Open species file
@@ -37,13 +42,17 @@ inputDF.index = rowNames
 print(inputDF)
 
 ########################## FILL THE INPUT MATRIX ###########################
-annotFile = open(csvFile, "r")
+annotDF = getCSV_DF(csvFile)
 
-for line in annotFile:
-    starting, dur, species = line.split(",")
+for line in range(len(annotDF)):
+    starting = annotDF.at[line, "Start"]
+    dur = annotDF.at[line, "Duration"]
+    species = annotDF.at[line, "Label"]
+    
     lineStart = math.floor(float(starting) * 100)/100.0
     lineEnd = math.floor(float(starting) * 100)/100 + math.floor(float(dur) * 100)/100 
     spec = species.replace("\n","")
+    
     # Get time stamps where there is presence of the species
     timeValues = np.arange(lineStart, lineEnd+stamp, stamp)
     
@@ -53,9 +62,9 @@ for line in annotFile:
         inputDF.at[spec, formatVal] = 1
 
 print(inputDF.shape)
-#inputDF.to_csv('./inputMATRIX.csv')
+inputDF.to_csv('./inputMATRIX.csv')
 
-# plt.figure()
-# sns.heatmap(inputDF)
-# plt.show()
+plt.figure()
+sns.heatmap(inputDF)
+plt.show()
 
