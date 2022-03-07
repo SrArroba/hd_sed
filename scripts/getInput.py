@@ -25,7 +25,9 @@ def countOverlap(annot_DF):
             overlap = True
             timesOverlap.append(colIndex*0.01)
         # Max overlap
-        if (len(events) > maxOverlap): maxOverlap = len(events)
+        if (len(events) > maxOverlap): 
+            maxOverlap = len(events)
+            print("Max at: ", column)
 
         colIndex += 1
 
@@ -56,7 +58,6 @@ def getInputMatrix(csvDF):
     # Create DataFrame
     inputDF = pd.DataFrame(zerosMatrix, columns=columnNames)
     inputDF.index = rowNames
-    print(inputDF)
 
     ########################## FILL THE INPUT MATRIX ###########################
     for line in range(len(csvDF)):
@@ -106,7 +107,6 @@ def concatSeveralCSV(csvList, positionList):
 
     # Concatenate list of DF into a single DF
     result = pd.concat(frames, ignore_index=True)
-    print(result)
 
     return result
 
@@ -138,7 +138,7 @@ def getCSV_DF(csvFile):
 
 ### MAIN PARAMETERS ###
 stamp = 0.01
-desiredOverlap = 3
+desiredOverlap = 7
 stdDuration = 5
 
 audioFolder = "../data/nips4b/audio/original/train/"
@@ -151,57 +151,34 @@ outAnnotFolder = "../data/nips4b/mergedAnnotations/"
 
 #######################
 
-chosenIDs = []
-combPol = 0
-rdmFile = "612.csv" #random.choice(listAnnot)
-chosenIDs.append(annotFolder+rdmFile)
-fileDF = getCSV_DF(annotFolder+rdmFile)
-inputDF = getInputMatrix(fileDF)
+###### CHOOSE WHICH FILES ARE GOING TO BE MERGED #####    
+nFiles = random.randint(2, desiredOverlap) # Number of files to merge
+chosenIDs = [] # List of chosen IDS to merge
 
-polyphony = countOverlap(inputDF)
-combPol += polyphony
-
-###### CHOOSE WHICH FILES ARE GOING TO BE MERGED #####
-if(polyphony == desiredOverlap):
-    print("File already generated with polyphony of ",desiredOverlap, " (",rdmFile,")")
-
-else:
-    polReached = False
-    while(not polReached): # Repeat until reaching desired 
-        rdmFile = "010.csv" #random.choice(listAnnot)
-        
-        if (rdmFile in chosenIDs): # Check that the file is not already analyzed
-            continue
-        fileDF = getCSV_DF(annotFolder+rdmFile)
-        newDF = getInputMatrix(fileDF)
-        newOv = countOverlap(newDF)
-        
-        if(newOv + combPol > desiredOverlap): # Check if it doesn't get a polyphony higher than desired
-            continue
-        
-        chosenIDs.append(annotFolder+rdmFile)
-        combPol += newOv
-
-        if(combPol == desiredOverlap): # When reaching the desired polyphony
-            polReached = True
-        
-    print(chosenIDs)
+for i in range(nFiles):
+    rdmFile = random.choice(listAnnot) # Choose random file from annotation folder
+    fileID = getFileID(rdmFile)
     
+    if(fileID in chosenIDs): # Check that the file is not already considered
+        continue
+    
+    chosenIDs.append(annotFolder+rdmFile)
+
+print("CHOSEN IDS: ", chosenIDs)
+
 ##### MERGE THOSE FILES #####
 posList = np.zeros(len(chosenIDs))
-audioList = []
-for ann in chosenIDs:
-    fileID = getFileID(ann)
-    audioList.append(audioFolder+fileID+".wav")
-
 csvDF = concatSeveralCSV(chosenIDs, posList)
-audioPath = mergeAudios(audioList, posList)
 
-##### GET INPUT DATAFRAME #####
-inputDF = getInputMatrix(csvDF)
+bigDF = getInputMatrix(csvDF) # Get input dataframe
 
-#print(inputDF)
+finalOv = countOverlap(bigDF)
 
-plt.figure()
-sns.heatmap(inputDF)
-plt.show()
+if(finalOv > desiredOverlap): # Take only files with less or equal polyphony as desired
+    print("Nah")
+else:
+    print("FINAL OVERLAP: ", finalOv)
+
+    plt.figure()
+    sns.heatmap(bigDF)
+    plt.show()
