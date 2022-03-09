@@ -1,14 +1,48 @@
-import os
 import librosa
+import librosa.display
+import matplotlib.pyplot as plt
+import math
+import numpy as np
+import os
+import pandas as pd
 from pydub import AudioSegment
 import random
-import pandas as pd
-import numpy as np
-import math
 import seaborn as sns
-import matplotlib.pyplot as plt
 
 ###################################### METHODS ############################################
+def chooseRandomFiles():
+    nFiles = random.randint(2, desiredOverlap) # Number of files to merge
+    chosenIDs = [] # List of chosen IDS to merge
+
+    for i in range(nFiles):
+        rdmFile = random.choice(listAnnot) # Choose random file from annotation folder
+        fileID = getFileID(rdmFile)
+        
+        if(fileID in chosenIDs): # Check that the file is not already considered
+            continue
+        
+        chosenIDs.append(fileID)
+    
+    return chosenIDs
+
+def concatSeveralCSV(csvList, positionList):
+    # Create a list of DataFrames 
+    frames = []
+
+    for i in range(len(csvList)):
+        df = getCSV_DF(csvList[i]) # Get DF
+        pos = positionList[i]
+        
+        # Change start value (position value)
+        for j in range(len(df)):
+            df.at[j, "Start"] += pos
+        frames.append(df)
+
+    # Concatenate list of DF into a single DF
+    result = pd.concat(frames, ignore_index=True) # Ignore index = continues index list without starting from 0 again
+
+    return result
+
 def countOverlap(annot_DF):
     # Study overlapping (more than 1 non zero value in a column)
     overlap = False 
@@ -32,6 +66,38 @@ def countOverlap(annot_DF):
         colIndex += 1
 
     return maxOverlap
+
+def createAnnotList(listID):
+    annotList = []
+    for i in listID:
+        annotList.append(annotFolder+i+".csv")
+    
+    return annotList
+
+def createAudioList(listID):
+    audioList = []
+    for i in listID:
+        audioList.append(audioFolder+i+".wav")
+    
+    return audioList
+
+def getCombinedName(filesList, extension):
+    finalName = ""
+    for f in filesList:
+        finalName = finalName + getFileID(f) + "_"
+    finalName = finalName[:-1] + extension # Renove last _ and add extension
+
+    return finalName
+
+def getCSV_DF(csvFile):
+    columnNames = ['Start','Duration', 'Label']
+    df = pd.read_csv(csvFile, names = columnNames)
+    return df
+
+def getFileID(fileName):
+    fileSplit = fileName[:-4].split("/") # Remove .csv and split in subfolders
+    fileID = fileSplit[len(fileSplit)-1] # Remove the rest, keep only numbers(ID)
+    return fileID
 
 def getInputMatrix(csvDF):
     # Open species file
@@ -79,41 +145,18 @@ def getInputMatrix(csvDF):
 
     return inputDF
 
-def getFileID(fileName):
-    fileSplit = fileName[:-4].split("/") # Remove .csv and split in subfolders
-    fileID = fileSplit[len(fileSplit)-1] # Remove the rest, keep only numbers(ID)
-    return fileID
+def getSpectrogram(audioSegment):
+    # Get samples and transform to np array
+    samples = audioSegment.get_array_of_samples()
+    arr = np.array(samples).astype(np.float32)
+    
+    # Obtain librosa mel spectrogram
+    sr = 44100
+    S = librosa.feature.melspectrogram(y=arr, sr=sr)
 
-def getCombinedName(filesList, extension):
-    finalName = ""
-    for f in filesList:
-        finalName = finalName + getFileID(f) + "_"
-    finalName = finalName[:-1] + extension # Renove last _ and add extension
+    return S
 
-    return finalName
-
-def concatSeveralCSV(csvList, positionList):
-    # Create a list of DataFrames 
-    frames = []
-
-    for i in range(len(csvList)):
-        df = getCSV_DF(csvList[i]) # Get DF
-        pos = positionList[i]
-        
-        # Change start value (position value)
-        for j in range(len(df)):
-            df.at[j, "Start"] += pos
-        frames.append(df)
-
-    # Concatenate list of DF into a single DF
-    result = pd.concat(frames, ignore_index=True)
-
-    return result
-
-def mergeAudios(audioList, positionList):
-    # Get final audio file name
-    audioName = getCombinedName(audioList, ".wav")
-
+def mergeAudios(audioList, positionList): # Merge from audio list and generate an AudioSegment object
     # Generate empty audio file
     finalAudio = AudioSegment.silent(duration=1000*stdDuration)
 
@@ -122,16 +165,18 @@ def mergeAudios(audioList, positionList):
         soundSeg = AudioSegment.from_file(audioList[i], format="wav")
         finalAudio = finalAudio.overlay(soundSeg, position=positionList[i])
     
-    # Export audio file (i.e. save it)
-    finalPath = outAudioFolder+audioName
-    file_handle = finalAudio.export(finalPath, format="wav")
+    return finalAudio 
 
-    return audioName 
-
-def getCSV_DF(csvFile):
-    columnNames = ['Start','Duration', 'Label']
-    df = pd.read_csv(csvFile, names = columnNames)
-    return df
+def plotSpec(S):
+    sr = 44100
+    fig, ax = plt.subplots()
+    S_dB = librosa.power_to_db(S, ref=np.max)
+    img = librosa.display.specshow(S_dB, x_axis='time',
+                            y_axis='mel', sr=sr,
+                            fmax=8000, ax=ax)
+    fig.colorbar(img, ax=ax, format='%+2.0f dB')
+    ax.set(title='Mel-frequency spectrogram')
+    plt.show()
 
 
 ###################################### MAIN ###############################################
@@ -146,39 +191,33 @@ annotFolder = "../data/nips4b/annotations/"
 listAnnot = os.listdir(annotFolder) # Only file name, no path
 speciesFile = "../data/nips4b/metadata/nips4b_birdchallenge_espece_list.csv"
 
-outAudioFolder = "../data/nips4b/audio/o3/"
-outAnnotFolder = "../data/nips4b/mergedAnnotations/"
-
 #######################
 
 ###### CHOOSE WHICH FILES ARE GOING TO BE MERGED #####    
-nFiles = random.randint(2, desiredOverlap) # Number of files to merge
-chosenIDs = [] # List of chosen IDS to merge
+chosenIDs = chooseRandomFiles()
 
-for i in range(nFiles):
-    rdmFile = random.choice(listAnnot) # Choose random file from annotation folder
-    fileID = getFileID(rdmFile)
-    
-    if(fileID in chosenIDs): # Check that the file is not already considered
-        continue
-    
-    chosenIDs.append(annotFolder+rdmFile)
-
-print("CHOSEN IDS: ", chosenIDs)
-
-##### MERGE THOSE FILES #####
+##### MERGE CSV FILES #####
 posList = np.zeros(len(chosenIDs))
-csvDF = concatSeveralCSV(chosenIDs, posList)
+chosenCSV = createAnnotList(chosenIDs)
+csvDF = concatSeveralCSV(chosenCSV, posList)
 
 bigDF = getInputMatrix(csvDF) # Get input dataframe
 
 finalOv = countOverlap(bigDF)
 
+##### CHECK IF MATCHING DESIRED OVERLAPPING #####
 if(finalOv > desiredOverlap): # Take only files with less or equal polyphony as desired
-    print("Nah")
+    print("Over desired overlapping (",finalOv,")")
 else:
     print("FINAL OVERLAP: ", finalOv)
 
+    # Print heat map (annotations)
     plt.figure()
     sns.heatmap(bigDF)
     plt.show()
+
+    # Merge audios and obtain spectrogram
+    audioList = createAudioList(chosenIDs)
+    mergedAudio = mergeAudios(audioList, posList)
+    spec = getSpectrogram(mergedAudio)
+    plotSpec(spec)
