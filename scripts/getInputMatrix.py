@@ -20,6 +20,11 @@ speciesFile = "../data/nips4b/metadata/nips4b_birdchallenge_espece_list.csv"
 speciesDF = pd.read_csv(speciesFile) # Make it DataFrame
 speciesDF = speciesDF.iloc[1: , :] # Remove empty first row
 
+# Open species file
+speciesFile = "../data/nips4b/metadata/nips4b_birdchallenge_espece_list.csv"
+speciesDF = pd.read_csv(speciesFile) # Make it DataFrame
+speciesDF = speciesDF.iloc[1: , :] # Remove empty first row
+
 # Duration properties
 stdDuration = 5
 stamp = 0.01
@@ -39,16 +44,13 @@ zerosMatrix = np.zeros((len(rowNames), len(columnNames)))
 # Create DataFrame
 inputDF = pd.DataFrame(zerosMatrix, columns=columnNames)
 inputDF.index = rowNames
-print(inputDF)
 
 ########################## FILL THE INPUT MATRIX ###########################
-annotDF = getCSV_DF(csvFile)
+for line in range(len(csvDF)):
+    starting = csvDF.at[line, "Start"]
+    dur = csvDF.at[line, "Duration"]
+    species = csvDF.at[line, "Label"]
 
-for line in range(len(annotDF)):
-    starting = annotDF.at[line, "Start"]
-    dur = annotDF.at[line, "Duration"]
-    species = annotDF.at[line, "Label"]
-    
     lineStart = math.floor(float(starting) * 100)/100.0
     lineEnd = math.floor(float(starting) * 100)/100 + math.floor(float(dur) * 100)/100 
     spec = species.replace("\n","")
@@ -60,8 +62,6 @@ for line in range(len(annotDF)):
     for val in timeValues:
         formatVal = format(val, '.2f')
         inputDF.at[spec, formatVal] = 1
-
-print(inputDF.shape)
 inputDF.to_csv('./inputMATRIX.csv')
 
 plt.figure()
