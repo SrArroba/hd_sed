@@ -10,9 +10,17 @@ from pydub import AudioSegment
 import random
 import seaborn as sns
 import sed_eval
+from random import randint
 
 
 ###################################### METHODS ############################################
+def annot_to_windows(annotation):
+    windows = []
+    for win in annotation.T:
+        windows.append(win)
+
+    return windows
+
 def chooseRandomFiles(polyphony):
     #### Return a list of file IDs with length between 2 and the desired overlap 
 
@@ -85,29 +93,24 @@ def createAudioList(listID):
     
     return audioList
 
-def from_InputDF_to_SELDF(inputDF):
-    columnNames = ["Start", "End", "Label"]
-    selDF = df = pd.DataFrame(columns = columnNames)
+def extract_mbe(audio_data, sr, nfft, n_mels):
+    ###############################
+    # Output: (n_mels, n_frames)
+    ###############################
+    samples = audio_data.get_array_of_samples()
+    y = np.array(samples).astype(np.float32)
 
-    for index, row in inputDF.iterrows():
-        checkZero = False
-        for cindex, col in row.iteritems():
-            if col == 1.0 and not checkZero: # First 1
-                start = cindex
-                label = index
-                checkZero = True
-            if col == 0.0 and checkZero: # A 0 after a 1 
-                end = float(cindex)-0.01
-                entry = {'Start': start, 'End': end, 'Label': label}
-                selDF = selDF.append(entry, ignore_index = True)
-                checkZero = False
-            if cindex == "5.00" and col == 1.0: # If it ends at the last time stamp
-                end = float(cindex)
-                entry = {'Start': start, 'End': end, 'Label': label}
-                print(entry)
-                selDF = selDF.append(entry, ignore_index = True)
-    
-    return selDF                
+    spec, n_fft = librosa.core.spectrum._spectrogram(y=y, n_fft=nfft, hop_length=nfft//2, power=1)
+    mel = librosa.filters.mel(sr=sr, n_fft=nfft, n_mels=n_mels)
+
+    return np.log(np.dot(mel, spec))
+
+def features_to_windows(feature):
+    windows = []
+    for win in feature.T:
+        windows.append(win)
+
+    return windows            
 
 def generateDataset(n_files, polyphony):
     # -----------------------------------------------------------
@@ -120,43 +123,56 @@ def generateDataset(n_files, polyphony):
 
     inFeat = []
     inAnnot = []
-
-    while(len(inFeat) != n_files): # Iterate until reaching desired amount of files
+    count = 0
+    while(count != n_files): # Iterate until reaching desired amount of files
         # Choose files 
         chosenIDs = chooseRandomFiles(polyphony) # 334
 
-        ##### MERGE CSV FILES #####
         posList = np.zeros(len(chosenIDs))
+        
+        ##### MERGE AUDIOS and OBTAIN FEATURE #####
+        audioList = createAudioList(chosenIDs)
+        mergedAudio = mergeAudios(audioList, posList)
+        
+        # spec = getSpectrogram(mergedAudio)
+        
+        mbe = extract_mbe(mergedAudio, sr, win_len, n_mels)
+
+        ##### MERGE CSV FILES #####
         chosenCSV = createAnnotList(chosenIDs)
         csvDF = concatSeveralCSV(chosenCSV, posList)
 
-        inputMatrix = getInputMatrix(csvDF) # Get input dataframe
+        inputMatrix = getInputMatrix(csvDF, mbe.shape[1]) # Get input dataframe
 
-        #print("Input annotations shape: ", inputDF.shape)
+        # print("Input annotations shape: ", inputMatrix.shape)
 
         finalOv = countOverlap(inputMatrix)
 
         ##### CHECK IF MATCHING DESIRED OVERLAPPING #####
         if(finalOv <= polyphony): # Take only files with less or equal polyphony as desired
-
-            # Merge audios and obtain spectrogram
-            audioList = createAudioList(chosenIDs)
-            mergedAudio = mergeAudios(audioList, posList)
-            spec = getSpectrogram(mergedAudio)
-            ## Print heat map (annotations)
+            count += 1
+            print("Generating dataset: {} out of {} ({} %)".format(count, n_files, (100*count/n_files)), end='\r')
+            
+            ## Print heat map (annotations) and spectrogram
             # plt.figure()
             # sns.heatmap(inputMatrix)
             # plt.show()
-            #plotSpec(spec)
-            # plotSpec2(spec)
-            #eb = getEnergyBands(spec, inputDF, 40, 0.5)
+            # plotSpec(spec)
 
             # Fill returning lists (input features and annotations)
-            inAnnot.append(inputMatrix)
-            inFeat.append(spec)
-           
+            feat_wins = features_to_windows(mbe)
+            annot_wins = annot_to_windows(inputMatrix)
+
+            for w in feat_wins:
+                inFeat.append(w)
+            for y in annot_wins:
+                inAnnot.append(y)
+            
+            # inFeat.append(mbe.T)
+            # inAnnot.append(inputMatrix.T)
+
     inFeat = np.array(inFeat)
-    #inAnnot = np.array(inAnnot)
+    inAnnot = np.array(inAnnot)
 
     return inFeat, inAnnot
 
@@ -174,43 +190,21 @@ def getCSV_DF(csvFile):
     df = pd.read_csv(csvFile, names = columnNames)
     return df
 
-def getEnergyBands(spec, annotDF, window, overlap): 
-    # ----------------------------------------------
-    # Window in miliseconds
-    # Overlap in percetange: [0,1)
-    # ----------------------------------------------
-
-    bands = []
-    step = int(window*overlap/10)
-    nBands = int(len(spec[0])/step)
-
-    for i in range(nBands):
-        st = i*step
-        end = st + step
-       # print("STARTS; END --> ", st, " --> ", end)
-        band = spec[:, st:end]
-        bands.append(band)
-    
-    # print("Number of energy bands: ", len(bands))
-    # print("Energy band shape: ", bands[0].shape)
-    return bands
-
 def getFileID(fileName):
     fileSplit = fileName[:-4].split("/") # Remove .csv and split in subfolders
     fileID = fileSplit[len(fileSplit)-1] # Remove the rest, keep only numbers(ID)
     return fileID
 
-def getInputMatrix(csvDF):
+def getInputMatrix(csvDF, n_seps):
     ###########################################################
     # Gets DF from original csv (Start, Duration, Label) format
-    # and transform it to binary matrix that will be fed to the
-    # model as output/annotations 
+    # and the time seàraton and transform it to binary matrix 
+    # that will be fed to the model as output/annotations 
     # Output format (n_classes, time_stamps)
     ###########################################################
 
     # Determines how many divisions are in the time scale 
-    specFeats = 430
-    stamp = stdDuration/specFeats
+    stamp = stdDuration/n_seps
 
     # Transform to [onset, offset, label] (SEL) dataframe
     df_sel = get_SEL_DF(csvDF)
@@ -225,12 +219,12 @@ def getInputMatrix(csvDF):
     # Obtain binary matrix 
     mat = sed_eval.util.event_roll.event_list_to_event_roll(dict1, labels, stamp)
     mat = np.transpose(mat) # Transpose
-    if(mat.shape[1] == (specFeats+1)):
+    if(mat.shape[1] == (n_seps+1)):
         mat = np.delete(mat, -1, axis=1) # Remove last to match spectrogram shape
 
     # Check if is smaller than the standard length:
-    if(mat.shape[1] < specFeats):
-        colMissing = specFeats - mat.shape[1]
+    if(mat.shape[1] < n_seps):
+        colMissing = n_seps - mat.shape[1]
         matZeros = np.zeros((len(labels), colMissing))
         
         # Concatenate original matrix with the submatrix of 0s
@@ -295,17 +289,6 @@ def plotSpec(S):
     ax.set(title='Mel-frequency spectrogram')
     plt.show()
 
-def plotSpec2(S):
-    sr = 44100
-    fig, ax = plt.subplots()
-    S_dB = librosa.power_to_db(S[0], ref=np.max)
-    img = librosa.display.specshow(S_dB, x_axis='time',
-                            y_axis='mel', sr=sr,
-                            fmax=8000, ax=ax)
-    fig.colorbar(img, ax=ax, format='%+2.0f dB')
-    ax.set(title='Mel-frequency spectrogram')
-    plt.show()
-
 ###################################### MAIN ###############################################
 
 ### MAIN PARAMETERS ###
@@ -319,7 +302,7 @@ speciesFile = "../data/nips4b/metadata/nips4b_birdchallenge_espece_list.csv"
 # Spectrogram values
 sr = 22050
 win_len = 2048
-hop_len = 512
+hop_len = 1024
 n_mels = 128
 fr = sr/hop_len
 # print("###################################")
@@ -335,4 +318,4 @@ fr = sr/hop_len
 #######################
 
 
-# generateDataset(10, 3)
+# generateDataset(2, 3)
