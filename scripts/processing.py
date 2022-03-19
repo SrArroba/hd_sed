@@ -160,20 +160,14 @@ def generateDataset(n_files, polyphony):
             # plotSpec(spec)
 
             # Fill returning lists (input features and annotations)
-            feat_wins = features_to_windows(mbe)
-            annot_wins = annot_to_windows(inputMatrix)
-
-            for w in feat_wins:
-                inFeat.append(w)
-            for y in annot_wins:
-                inAnnot.append(y)
-            
-            # inFeat.append(mbe.T)
-            # inAnnot.append(inputMatrix.T)
+            inFeat.append(mbe.T)
+            inAnnot.append(inputMatrix.T)
 
     inFeat = np.array(inFeat)
     inAnnot = np.array(inAnnot)
 
+    print("Input shape: ", inFeat[0].shape)
+    print("Annot shape: ", inAnnot[0].shape)
     return inFeat, inAnnot
 
 
@@ -318,4 +312,4 @@ fr = sr/hop_len
 #######################
 
 
-# generateDataset(2, 3)
+generateDataset(2, 3)

@@ -39,11 +39,10 @@ def generate_sets():
     return X_train, X_test, y_train, y_test
 
 def preprocess(X_train, X_test, y_train, y_test):
-    print(X_train.shape)
-    print(X_test.shape)
-    # Reshape sets
-    X_train = X_train.reshape(len(X_train), n_mels)
-    X_test = X_test.reshape(len(X_test), n_mels)
+    
+    # Reshape sets: (length of set, frames, mels, 1)
+    X_train = X_train.reshape(len(X_train), time_stamps, n_mels, 1)
+    X_test = X_test.reshape(len(X_test),time_stamps, n_mels, 1)
     # Change output to categorical
     #print(y_train[0].shape)
     # y_train = to_categorical(y_train)
@@ -54,24 +53,17 @@ def preprocess(X_train, X_test, y_train, y_test):
 def create_model(in_shape, out_shape):
     model = Sequential()
     #add model layers
-    model.add(Input(shape=(n_mels, 1)))
-    model.add(Flatten())
-    model.add(Dense(128, activation='relu'))
-    model.add(Dense(n_classes, activation='softmax'))
+    model.add(Input(shape=(time_stamps, n_mels, 1)))
+
     # Convolutional part
-    # model.add(Conv2D(cnn_filters, kernel_size=(1,1), activation='relu'))
-    # model.add(MaxPooling2D(pool_size=(1,5)))
-    # model.add(Dropout(drop_rate))
-    # model.add(Conv2D(cnn_filters, kernel_size=(1,1), activation='relu'))
-    # model.add(MaxPooling2D(pool_size=(1,2)))
-    # model.add(Dropout(drop_rate))
-    # model.add(Conv2D(cnn_filters, kernel_size=(1,1), activation='relu'))
-    # model.add(MaxPooling2D(pool_size=(1,2)))
-    # model.add(Dropout(drop_rate))
-   
-    # model.add(Permute((2,1,3)))
-    # model.add(Reshape((in_shape[-2], -1)))
-    # model.add(Dense(n_classes, activation='softmax'))
+    for i in range(len(filt_list)):
+        model.add(Conv2D(filt_list[i], kernel_size=(1,1), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(1, pool_list[i])))
+        model.add(Dropout(drop_rate))   
+    
+    model.add(Reshape((in_shape[-3], -1)))
+    #model.add(Dense(128, activation='relu'))
+    model.add(TimeDistributed(Dense(n_classes, activation='sigmoid')))
     #model.add(Activation('softmax', name='strong_out'))
    
     print(model.summary())
@@ -94,13 +86,15 @@ n_mels = 128
 # Model params
 drop_rate = 0.5
 # Convolutional params 
-cnn_filters = 128
+filt_list = [128, 64, 64]
+pool_list = [5, 2, 2]
 
 
 X_train, X_test, y_train, y_test = generate_sets()
 in_shape = X_train[0].shape
+out_shape = y_train[0].shape
 print("INPUT SIZE: ", X_train[0].shape)
 print("OUTPUT SIZE: ", y_train[0].shape)
-model = create_model(in_shape, 1)
+model = create_model(in_shape, out_shape)
 
 train_model(model, X_train, X_test, y_train, y_test)
