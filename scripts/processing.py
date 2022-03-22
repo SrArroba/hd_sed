@@ -11,6 +11,7 @@ import random
 import seaborn as sns
 import sed_eval
 from random import randint
+from sklearn import preprocessing
 
 
 ###################################### METHODS ############################################
@@ -20,6 +21,26 @@ def annot_to_windows(annotation):
         windows.append(win)
 
     return windows
+
+def build_mbe(audio_data, sr, nfft, n_mels):
+    ###############################
+    # Output: (n_mels, n_frames)
+    ###############################
+    samples = audio_data.get_array_of_samples()
+    y = np.array(samples).astype(np.float32)
+
+    spec, n_fft = librosa.core.spectrum._spectrogram(y=y, n_fft=nfft, hop_length=nfft//2, power=1)
+
+    mel = librosa.filters.mel(sr=sr, n_fft=nfft, n_mels=n_mels)
+
+    # Dot product of mel and spec
+    dot_prod = np.dot(mel, spec)
+    # dot_prod[dot_prod < 1] = 1
+    
+    # Tranform to log scale
+    log_out = np.log(dot_prod)
+    
+    return log_out
 
 def chooseRandomFiles(polyphony):
     #### Return a list of file IDs with length between 2 and the desired overlap 
@@ -93,18 +114,6 @@ def createAudioList(listID):
     
     return audioList
 
-def extract_mbe(audio_data, sr, nfft, n_mels):
-    ###############################
-    # Output: (n_mels, n_frames)
-    ###############################
-    samples = audio_data.get_array_of_samples()
-    y = np.array(samples).astype(np.float32)
-
-    spec, n_fft = librosa.core.spectrum._spectrogram(y=y, n_fft=nfft, hop_length=nfft//2, power=1)
-    mel = librosa.filters.mel(sr=sr, n_fft=nfft, n_mels=n_mels)
-
-    return np.log(np.dot(mel, spec))
-
 def features_to_windows(feature):
     windows = []
     for win in feature.T:
@@ -134,9 +143,9 @@ def generateDataset(n_files, polyphony):
         audioList = createAudioList(chosenIDs)
         mergedAudio = mergeAudios(audioList, posList)
         
-        # spec = getSpectrogram(mergedAudio)
+        #spec = getSpectrogram(mergedAudio)
         
-        mbe = extract_mbe(mergedAudio, sr, win_len, n_mels)
+        mbe = build_mbe(mergedAudio, sr, win_len, n_mels)
 
         ##### MERGE CSV FILES #####
         chosenCSV = createAnnotList(chosenIDs)
@@ -153,11 +162,14 @@ def generateDataset(n_files, polyphony):
             count += 1
             print("Generating dataset: {} out of {} ({} %)".format(count, n_files, (100*count/n_files)), end='\r')
             
-            ## Print heat map (annotations) and spectrogram
+            ## PRINT heat map (annotations) and spectrogram
             # plt.figure()
             # sns.heatmap(inputMatrix)
             # plt.show()
             # plotSpec(spec)
+
+            # Normalize features
+            #normFeat = normalize_data(mbe.T)
 
             # Fill returning lists (input features and annotations)
             inFeat.append(mbe.T)
@@ -236,7 +248,7 @@ def getSpectrogram(audioSegment):
 
     # Obtain librosa mel spectrogram
     S = librosa.feature.melspectrogram(y=arr, sr=sr,  power=1, win_length=win_len, hop_length=hop_len, n_mels=n_mels)
-    S = np.delete(S , -1, axis=1)
+    #S = np.delete(S , -1, axis=1)
     # Plot spectrogram (can be commmented)
     # plotSpec(S)    
     
@@ -271,6 +283,22 @@ def mergeAudios(audioList, positionList): # Merge from audio list and generate a
         finalAudio = finalAudio.overlay(soundSeg, position=positionList[i])
 
     return finalAudio 
+
+def normalize_data(feature):
+    # stdScal = preprocessing.StandardScaler()
+    # feature = stdScal.fit_transform(feature)
+    #feature = preprocessing.normalize(feature, norm='l2')
+    mean = np.mean(feature)
+    std = np.std(feature)
+
+    for elem in feature: 
+        elem = (elem-mean)/std
+    
+    print("MEAN Y STD: ", np.mean(feature), np.std(feature))
+    return feature
+
+def norm_val(val):
+    return (val-mean)/std
 
 def plotSpec(S):
     sr = 44100
@@ -312,4 +340,4 @@ fr = sr/hop_len
 #######################
 
 
-generateDataset(2, 3)
+# generateDataset(1, 3)

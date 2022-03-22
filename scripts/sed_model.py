@@ -24,10 +24,8 @@ import processing
 ########################################################################
 #                            FUNCTIONS                                 # 
 ########################################################################
-def generate_sets():
+def generate_sets(n_files, polyphony):
     # Generate entire dataset
-    n_files = 1000
-    polyphony = 3 
     train_x, train_y = processing.generateDataset(n_files, polyphony)
 
     # Separate into validation and training sets
@@ -69,11 +67,11 @@ def create_model(in_shape, out_shape):
     print(model.summary())
 
     #compile model
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
 def train_model(model, X_train, X_test, y_train, y_test):
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=50)
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=epochs)
 ########################################################################
 #                                 MAIN                                 # 
 ########################################################################
@@ -83,14 +81,19 @@ n_classes = 87
 time_stamps = 216
 n_mels = 128
 
+n_files = 10000
+polyphony = 3 
+
 # Model params
+epochs = 30
 drop_rate = 0.5
 # Convolutional params 
 filt_list = [128, 64, 64]
 pool_list = [5, 2, 2]
 
+# Set separation
+X_train, X_test, y_train, y_test = generate_sets(n_files, polyphony)
 
-X_train, X_test, y_train, y_test = generate_sets()
 in_shape = X_train[0].shape
 out_shape = y_train[0].shape
 print("INPUT SIZE: ", X_train[0].shape)
