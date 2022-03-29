@@ -90,28 +90,38 @@ def from_InputDF_to_SELDF(inputDF):
     
     return selDF      
 
-def f1_overall_framewise(O, T):
-    TP = ((2*T-O) == 1).sum()         
-    nr, ns = T.sum(), O.sum()
+def f1_score_all(output, truth):
+    TP = ((2*truth-output) == 1).sum()  
+    FP = np.logical_and(truth==0, output==1).sum()
+    FN = np.logical_and(truth==1, output==0).sum()       
+    TN = np.logical_and(truth==0, output==0).sum()
 
-    prec = float(TP) / float(ns + eps)
-    recall = float(TP) / float(nr + eps)
+    print("TP, TN, FP, FN: ", TP, TN, FP, FN)
+
+    prec = float(TP) / float(TP+FP + eps)
+    recall = float(TP) / float(TP+FN + eps)
     f1 = 2 * prec * recall / (prec + recall + eps)
 
     return f1
 
-def er_overall_framewise(O, T):
-    FP = np.logical_and(T==0, O==1).sum(1)
-    FN = np.logical_and(T==1, O==0).sum(1)
+def er_all(output, truth):
+    FP = np.logical_and(truth==0, output==1).sum()
+    FN = np.logical_and(truth==1, output==0).sum()
 
     S = np.minimum(FP, FN).sum()
     D = np.maximum(0, FN-FP).sum()
     I = np.maximum(0, FP-FN).sum()
 
-    nr = T.sum()
+    nr = truth.sum()
     ER = (S+D+I) / (nr + 0.0)
 
     return ER
+
+def get_score(output, truth):
+    f1 = f1_score_all(output, truth)
+    er = er_all(output, truth)
+
+    return f1, er
 ################################################################
 
 segment_len = 1
@@ -133,5 +143,8 @@ mInput = getInputMatrix(dfMerged)
 altDF1 = from_InputDF_to_SELDF(input1)
 altDF2 = from_InputDF_to_SELDF(input2)
 
-print(f1_overall_framewise(input1.values, input1.values))
-print(er_overall_framewise(input1.values, input1.values))
+test1 = np.array([[1,0,0], [0,1,0], [0,0,1]])
+test2 = np.array([[1,0,1],[0,1,0], [0,0,1]])
+
+# print(f1_score_all(test1, test2))
+# print(er_all(test1, test2))

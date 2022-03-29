@@ -1,4 +1,4 @@
-from audiomentations import SpecCompose, SpecChannelShuffle, SpecFrequencyMask
+from audiomentations import Compose, AddGaussianNoise, TimeStretch, PitchShift, Shift
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -26,8 +26,7 @@ def build_mbe(audio_data, sr, nfft, n_mels):
     ###############################
     # Output: (n_mels, n_frames)
     ###############################
-    samples = audio_data.get_array_of_samples()
-    y = np.array(samples).astype(np.float32)
+    y = audio_data
 
     spec, n_fft = librosa.core.spectrum._spectrogram(y=y, n_fft=nfft, hop_length=nfft//2, power=1)
 
@@ -35,7 +34,7 @@ def build_mbe(audio_data, sr, nfft, n_mels):
 
     # Dot product of mel and spec
     dot_prod = np.dot(mel, spec)
-    # dot_prod[dot_prod < 1] = 1
+    dot_prod[dot_prod < 1] = 1
     
     # Tranform to log scale
     log_out = np.log(dot_prod)
@@ -45,7 +44,7 @@ def build_mbe(audio_data, sr, nfft, n_mels):
 def chooseRandomFiles(polyphony):
     #### Return a list of file IDs with length between 2 and the desired overlap 
 
-    nFiles = random.randint(2, polyphony) # Number of files to merge
+    nFiles = random.randint(3, polyphony) # Number of files to merge
     chosenIDs = [] # List of chosen IDS to merge
 
     for i in range(nFiles):
@@ -143,15 +142,15 @@ def generateDataset(n_files, polyphony):
         audioList = createAudioList(chosenIDs)
         mergedAudio = mergeAudios(audioList, posList)
         
-        #spec = getSpectrogram(mergedAudio)
+        spec = getSpectrogram(mergedAudio)
         
-        mbe = build_mbe(mergedAudio, sr, win_len, n_mels)
+        # mbe = build_mbe(mergedAudio, sr, win_len, n_mels)
 
         ##### MERGE CSV FILES #####
         chosenCSV = createAnnotList(chosenIDs)
         csvDF = concatSeveralCSV(chosenCSV, posList)
 
-        inputMatrix = getInputMatrix(csvDF, mbe.shape[1]) # Get input dataframe
+        inputMatrix = getInputMatrix(csvDF, spec.shape[1]) # Get input dataframe
 
         # print("Input annotations shape: ", inputMatrix.shape)
 
@@ -169,10 +168,10 @@ def generateDataset(n_files, polyphony):
             # plotSpec(spec)
 
             # Normalize features
-            #normFeat = normalize_data(mbe.T)
-
+            normFeat = normalize_data(spec.T)
+            #print("MIN-MAX NORM: ", np.amin(normFeat), np.amax(normFeat))
             # Fill returning lists (input features and annotations)
-            inFeat.append(mbe.T)
+            inFeat.append(normFeat)
             inAnnot.append(inputMatrix.T)
 
     inFeat = np.array(inFeat)
@@ -243,16 +242,20 @@ def getInputMatrix(csvDF, n_seps):
 
 def getSpectrogram(audioSegment):
     # Get samples and transform to np array
-    samples = audioSegment.get_array_of_samples()
-    arr = np.array(samples).astype(np.float32)
+    #samples = audioSegment.get_array_of_samples()
+    arr = np.array(audioSegment).astype(np.float32)
 
     # Obtain librosa mel spectrogram
     S = librosa.feature.melspectrogram(y=arr, sr=sr,  power=1, win_length=win_len, hop_length=hop_len, n_mels=n_mels)
+
+    # Power to decibels
+    S_dB = librosa.power_to_db(S, ref=np.max)
+
     #S = np.delete(S , -1, axis=1)
     # Plot spectrogram (can be commmented)
     # plotSpec(S)    
     
-    return S
+    return S_dB
 
 def getLabelList():
     speciesFile = "../data/nips4b/metadata/nips4b_birdchallenge_espece_list.csv"
@@ -281,24 +284,44 @@ def mergeAudios(audioList, positionList): # Merge from audio list and generate a
     for i in range(len(audioList)):
         soundSeg = AudioSegment.from_file(audioList[i], format="wav")
         finalAudio = finalAudio.overlay(soundSeg, position=positionList[i])
+    
+    samples = finalAudio.get_array_of_samples()
+    samples = np.array(samples).astype(np.float32)
+    
+    # Data augmentation
+    augment = Compose([
+        AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+        TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
+        PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
+        Shift(min_fraction=-0.5, max_fraction=0.5, p=0.5),
+    ])
+    # specNoNorm = getSpectrogram(samples)
+    finalAudio = augment(samples=samples, sample_rate=sr)
+    # specNorm = getSpectrogram(finalAudio)
 
     return finalAudio 
 
 def normalize_data(feature):
-    # stdScal = preprocessing.StandardScaler()
-    # feature = stdScal.fit_transform(feature)
+    stdScal = preprocessing.StandardScaler()
+    feature = stdScal.fit_transform(feature)
     #feature = preprocessing.normalize(feature, norm='l2')
-    mean = np.mean(feature)
-    std = np.std(feature)
+    # mean = np.mean(feature)
+    # std = np.std(feature)
 
-    for elem in feature: 
-        elem = (elem-mean)/std
+    # for elem in feature: 
+    #     elem = (elem-mean)/std
     
-    print("MEAN Y STD: ", np.mean(feature), np.std(feature))
+    # print("MEAN Y STD: ", np.mean(feature), np.std(feature))
     return feature
 
 def norm_val(val):
     return (val-mean)/std
+
+def output_to_binary(outMatrix, threshold):
+    outMatrix[outMatrix > threshold] = 1
+    outMatrix[outMatrix < threshold] = 0
+    
+    return outMatrix
 
 def plotSpec(S):
     sr = 44100
@@ -340,4 +363,4 @@ fr = sr/hop_len
 #######################
 
 
-# generateDataset(1, 3)
+# inFeat, inAnnot = generateDataset(10, 3)

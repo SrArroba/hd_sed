@@ -1,4 +1,5 @@
 *.egg-info
+*.h5
 data
 scripts/findEmptyAudios.py
 scripts/getVisualAnnot.py
