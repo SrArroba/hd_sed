@@ -1,4 +1,4 @@
-from audiomentations import Compose, AddGaussianNoise, TimeStretch, PitchShift, Shift
+from audiomentations import Compose, AddBackgroundNoise, AddGaussianNoise, TimeStretch, PitchShift, Shift
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -12,16 +12,9 @@ import seaborn as sns
 import sed_eval
 from random import randint
 from sklearn import preprocessing
-
+import scipy.signal
 
 ###################################### METHODS ############################################
-def annot_to_windows(annotation):
-    windows = []
-    for win in annotation.T:
-        windows.append(win)
-
-    return windows
-
 def build_mbe(audio_data, sr, nfft, n_mels):
     ###############################
     # Output: (n_mels, n_frames)
@@ -44,7 +37,7 @@ def build_mbe(audio_data, sr, nfft, n_mels):
 def chooseRandomFiles(polyphony):
     #### Return a list of file IDs with length between 2 and the desired overlap 
 
-    nFiles = random.randint(3, polyphony) # Number of files to merge
+    nFiles = random.randint(2, polyphony) # Number of files to merge
     chosenIDs = [] # List of chosen IDS to merge
 
     for i in range(nFiles):
@@ -68,7 +61,7 @@ def concatSeveralCSV(csvList, positionList):
         
         # Change start value (position value)
         for j in range(len(df)):
-            df.at[j, "Start"] += pos
+            df.at[j, "event_onset"] += pos
         frames.append(df)
 
     # Concatenate list of DF into a single DF
@@ -134,23 +127,22 @@ def generateDataset(n_files, polyphony):
     count = 0
     while(count != n_files): # Iterate until reaching desired amount of files
         # Choose files 
-        chosenIDs = chooseRandomFiles(polyphony) # 334
-
+        chosenIDs = chooseRandomFiles(polyphony)
         posList = np.zeros(len(chosenIDs))
         
         ##### MERGE AUDIOS and OBTAIN FEATURE #####
         audioList = createAudioList(chosenIDs)
         mergedAudio = mergeAudios(audioList, posList)
         
-        spec = getSpectrogram(mergedAudio)
-        
-        # mbe = build_mbe(mergedAudio, sr, win_len, n_mels)
+        # feat = getSpectrogram(mergedAudio)
+        feat = getMelSpectrogram(mergedAudio)
+        # feat = build_mbe(mergedAudio, sr, win_len, n_mels)
 
         ##### MERGE CSV FILES #####
         chosenCSV = createAnnotList(chosenIDs)
         csvDF = concatSeveralCSV(chosenCSV, posList)
 
-        inputMatrix = getInputMatrix(csvDF, spec.shape[1]) # Get input dataframe
+        inputMatrix = getInputMatrix(csvDF, feat.shape[1]) # Get input dataframe
 
         # print("Input annotations shape: ", inputMatrix.shape)
 
@@ -165,13 +157,17 @@ def generateDataset(n_files, polyphony):
             # plt.figure()
             # sns.heatmap(inputMatrix)
             # plt.show()
-            # plotSpec(spec)
+            # plotSpec(feat)
 
             # Normalize features
-            normFeat = normalize_data(spec.T)
-            #print("MIN-MAX NORM: ", np.amin(normFeat), np.amax(normFeat))
+            # print("MIN-MAX NO NORM: ", np.amin(feat), np.amax(feat))
+            # feat = (feat - feat.mean()) / feat.var()
+
+            feat = normalize_data(feat.T)
+            # print("MIN-MAX NORM: ", np.amin(feat), np.amax(feat))
             # Fill returning lists (input features and annotations)
-            inFeat.append(normFeat)
+            
+            inFeat.append(feat)
             inAnnot.append(inputMatrix.T)
 
     inFeat = np.array(inFeat)
@@ -240,7 +236,7 @@ def getInputMatrix(csvDF, n_seps):
  
     return mat
 
-def getSpectrogram(audioSegment):
+def getMelSpectrogram(audioSegment):
     # Get samples and transform to np array
     #samples = audioSegment.get_array_of_samples()
     arr = np.array(audioSegment).astype(np.float32)
@@ -249,11 +245,11 @@ def getSpectrogram(audioSegment):
     S = librosa.feature.melspectrogram(y=arr, sr=sr,  power=1, win_length=win_len, hop_length=hop_len, n_mels=n_mels)
 
     # Power to decibels
-    S_dB = librosa.power_to_db(S, ref=np.max)
+    S_dB = librosa.amplitude_to_db(S, ref=np.max, top_db=85, amin=1e-05)
 
     #S = np.delete(S , -1, axis=1)
     # Plot spectrogram (can be commmented)
-    # plotSpec(S)    
+    # plotSpec(S_dB)    
     
     return S_dB
 
@@ -264,6 +260,26 @@ def getLabelList():
     labels = np.delete(labels, 0) # Remove label 'Empty'
 
     return np.sort(labels)
+
+def getSpectrogram(audioSegment):
+    # Trasform audio segment samples to numpy array
+    arr = np.array(audioSegment).astype(np.float32)
+    # ShortTimeFourierTransform
+    _, _, spec = scipy.signal.stft(x=arr,
+                                    fs=sr,
+                                    nperseg=win_len,
+                                    noverlap=hop_len,
+                                    nfft=win_len)
+    # Amplitudes
+    amps = np.abs(spec)
+    # Spectrogram
+    spec = librosa.amplitude_to_db(S=amps,
+                                   ref=np.max,
+                                   amin=1e-05,
+                                   top_db=85)
+
+    return spec
+
 
 def get_SEL_DF(otherDF):
     columnNames = ["event_onset", "event_offset", "event_label"]
@@ -286,18 +302,16 @@ def mergeAudios(audioList, positionList): # Merge from audio list and generate a
         finalAudio = finalAudio.overlay(soundSeg, position=positionList[i])
     
     samples = finalAudio.get_array_of_samples()
-    samples = np.array(samples).astype(np.float32)
+    finalAudio = np.array(samples).astype(np.float32)
     
     # Data augmentation
     augment = Compose([
-        AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
-        TimeStretch(min_rate=0.8, max_rate=1.25, p=0.5),
+        #AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+        TimeStretch(min_rate=0.8, max_rate=1.15, p=0.5),
         PitchShift(min_semitones=-4, max_semitones=4, p=0.5),
         Shift(min_fraction=-0.5, max_fraction=0.5, p=0.5),
     ])
-    # specNoNorm = getSpectrogram(samples)
-    finalAudio = augment(samples=samples, sample_rate=sr)
-    # specNorm = getSpectrogram(finalAudio)
+    finalAudio = augment(samples=finalAudio, sample_rate=sr)
 
     return finalAudio 
 
@@ -314,7 +328,7 @@ def normalize_data(feature):
     # print("MEAN Y STD: ", np.mean(feature), np.std(feature))
     return feature
 
-def norm_val(val):
+def norm_feat(feat):
     return (val-mean)/std
 
 def output_to_binary(outMatrix, threshold):
@@ -323,16 +337,37 @@ def output_to_binary(outMatrix, threshold):
     
     return outMatrix
 
+def plotPredTruth(pred, truth):
+    # Transform to DF
+    pred = evaluation.from_annotMatrix_to_annotDF(pred)
+    truth = evaluation.from_annotMatrix_to_annotDF(truth)
+
+    # Plot
+    plt.rcParams["figure.figsize"] = [7.50, 3.50]
+    plt.rcParams["figure.autolayout"] = True
+
+    fig, (ax1, ax2) = plt.subplots(ncols=2)
+    fig.subplots_adjust(wspace=0.01)
+
+    sns.heatmap(pred, cmap="hot", ax=ax1, cbar=False)
+    sns.heatmap(truth, cmap="hot", ax=ax2, cbar=False)
+
+    ax2.yaxis.tick_right()
+
+    fig.subplots_adjust(wspace=0.001)
+    plt.show()
+  
 def plotSpec(S):
-    sr = 44100
+    sr = 22050
     fig, ax = plt.subplots()
-    S_dB = librosa.power_to_db(S, ref=np.max)
-    img = librosa.display.specshow(S_dB, x_axis='time',
+    # S_dB = librosa.power_to_db(S, ref=np.max)
+    img = librosa.display.specshow(S, x_axis='time',
                             y_axis='mel', sr=sr,
                             fmax=8000, ax=ax)
     fig.colorbar(img, ax=ax, format='%+2.0f dB')
     ax.set(title='Mel-frequency spectrogram')
     plt.show()
+
 
 ###################################### MAIN ###############################################
 
@@ -346,9 +381,9 @@ speciesFile = "../data/nips4b/metadata/nips4b_birdchallenge_espece_list.csv"
 
 # Spectrogram values
 sr = 22050
-win_len = 2048
-hop_len = 1024
-n_mels = 128
+win_len = 1024
+hop_len = 512
+n_mels = 40
 fr = sr/hop_len
 # print("###################################")
 # print("             AUDIO DATA: ")
@@ -363,4 +398,4 @@ fr = sr/hop_len
 #######################
 
 
-# inFeat, inAnnot = generateDataset(10, 3)
+# inFeat, inAnnot = generateDataset(1, 3)
