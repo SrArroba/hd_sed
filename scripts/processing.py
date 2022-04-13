@@ -173,8 +173,9 @@ def generateDataset(n_files, polyphony):
     inFeat = np.array(inFeat)
     inAnnot = np.array(inAnnot)
 
-    print("Input shape: ", inFeat[0].shape)
-    print("Annot shape: ", inAnnot[0].shape)
+    print("Input shape: ", inFeat[0].shape, "(", type(inFeat[0]), ")")
+    print("Annot shape: ", inAnnot[0].shape, "(", type(inAnnot[0]), ")")
+    
     return inFeat, inAnnot
 
 
@@ -187,7 +188,7 @@ def getCombinedName(filesList, extension):
     return finalName
 
 def getCSV_DF(csvFile):
-    columnNames = ['Start','Duration', 'Label']
+    columnNames = ['event_onset','event_duration', 'event_label']
     df = pd.read_csv(csvFile, names = columnNames)
     return df
 
@@ -286,9 +287,9 @@ def get_SEL_DF(otherDF):
     altDF = pd.DataFrame(columns = columnNames)
 
     for index, row in otherDF.iterrows():
-        altDF.at[index, "event_onset"] = otherDF.at[index, "Start"]
-        altDF.at[index, "event_offset"] = row.loc["Start"] + row.loc["Duration"]
-        altDF.at[index, "event_label"] = otherDF.at[index, "Label"]
+        altDF.at[index, "event_onset"] = otherDF.at[index, "event_onset"]
+        altDF.at[index, "event_offset"] = row.loc["event_onset"] + row.loc["event_duration"]
+        altDF.at[index, "event_label"] = otherDF.at[index, "event_label"]
 
     return altDF 
 

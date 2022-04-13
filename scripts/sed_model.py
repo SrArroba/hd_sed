@@ -21,6 +21,7 @@ from tensorflow.keras.optimizers import schedules, Adam, SGD
 
 # Local imports 
 import processing
+import dryad_process
 from evaluation import f1_score_all, er_all, get_score, sed_eval_scores
 
 
@@ -29,8 +30,9 @@ from evaluation import f1_score_all, er_all, get_score, sed_eval_scores
 ########################################################################
 def generate_sets(n_files, polyphony):
     # Generate entire dataset
-    train_x, train_y = processing.generateDataset(n_files, polyphony)
-
+    # train_x, train_y = processing.generateDataset(n_files, polyphony)
+    train_x, train_y = dryad_process.generateDataset(n_files, polyphony)
+   
     # Separate into validation and training sets
     X_train, X_test, y_train, y_test = train_test_split(train_x, train_y, test_size=0.1, random_state=42)
 
@@ -103,15 +105,15 @@ def train_model(model, X_train, X_test, y_train, y_test):
 ############################## PARAMETERS ##############################
 
 # Main values
-n_classes = 87
+n_classes = 20
 
-n_files = 5000
+n_files = 10
 polyphony = 3
 
 threshold = 0.5 # To create binary output matrix
 
 #### Model params ####
-epochs = 300
+epochs = 100
 drop_rate = 0.0
 batch_size = 128 # Batch size
 
@@ -135,15 +137,15 @@ print("OUTPUT SIZE: ", y_train[0].shape)
 ###############################################
 
 #### Create model // Load model ####
-# model = create_model(in_shape, out_shape)
-model = load_model('spec_no_dropout.h5')
+model = create_model(in_shape, out_shape)
+# model = load_model('spec_no_dropout.h5')
 print(model.summary())
 
 # Train 
 train_model(model, X_train, X_test, y_train, y_test)
 
 # Save model
-model.save('spec_no_dropout.h5')  # HDF5 file 
+# model.save('spec_no_dropout.h5')  # HDF5 file 
 
 ###############################################
 

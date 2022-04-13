@@ -83,7 +83,7 @@ def generateDataset(n_files, polyphony):
     inFeat = []
     inAnnot = []
     count = 0
-    
+    print("GENERATING DATASET of ", n_files," files and polyphony of ", polyphony)
     while(count != n_files): # Iterate until reaching desired amount of files
         # Choose files
         chosenIndex = chooseRandomFiles(polyphony)
@@ -93,6 +93,7 @@ def generateDataset(n_files, polyphony):
 
         ##### MERGE ANNOTS #####
         finalAnnot = mergeAnnots(chosenIndex)
+        # finalAnnot = finalAnnot.sort_values('event_label')
 
         ##### OBTAIN FEATURE and BINARY MATRIX #####
         feat = getMelSpectrogram(finalAudio)
@@ -104,21 +105,23 @@ def generateDataset(n_files, polyphony):
         ##### CHECK IF MATCHING DESIRED OVERLAPPING #####
         if(finalOv <= polyphony): # Take only files with less or equal polyphony as desired
             count += 1
-            print("Generating dataset: {} out of {} ({} %)".format(count, n_files, (100*count/n_files)), end='\r')
+            # print("Generating dataset: {} out of {} ({} %)".format(count, n_files, (100*count/n_files)), end='\r')
 
             ##### PRINTS #####
-            plotSpec(feat)
-            plotAnnotMatrix(inputMatrix)
+            # plotSpec(feat)
+            # plotAnnotMatrix(inputMatrix)
 
             ##### NORMALIZE FEATURE #####
             feat = normalize_data(feat.T)
-
+            
             ##### APPEND TO DATASET LIST ###### 
             inFeat.append(feat)
             inAnnot.append(inputMatrix.T)
 
-    print("Input shape: ", inFeat[0].shape)
-    print("Annot shape: ", inAnnot[0].shape)
+    inFeat = np.array(inFeat)
+    inAnnot = np.array(inAnnot)
+    print("In shape: ", inFeat[0].shape, "(", type(inFeat[0]), ")")
+    print("Out shape: ", inAnnot[0].shape, "(", type(inAnnot[0]), ")")
     return inFeat, inAnnot
 
 def get_all_annot_and_feat():
@@ -139,7 +142,7 @@ def get_all_annot_and_feat():
         for j in range(len(audioFiles)):
             audioPath = audioFolds[i]+audioFiles[j]
             annotPath = annotFolds[i]+annotFiles[j]
-            print("FILE: ", audioPath)
+            print("Processing file... ", audioPath, end='\r')
             # Split DataFrame
             df = getTXT_DF(annotPath)
             df_list, valid_starts = separate_annot(df, clip_win, clip_hop)
@@ -169,24 +172,18 @@ def getInputMatrix(df, n_seps):
 
     # Determines how many divisions are in the time scale 
     stamp = clip_win/n_seps
-    
-    # Tranform to a records dictionary
-    # E.g. {onset: "", offset: "", label: ""}
+
+    # Tranform to a records dictionary - E.g. {onset: "", offset: "", label: ""}
     dictEvents = df.to_dict('records')   
 
     # Obtain binary matrix 
     mat = sed_eval.util.event_roll.event_list_to_event_roll(dictEvents, speciesList, stamp)
-    mat = np.transpose(mat) # Transpose
-    if(mat.shape[1] == (n_seps+1)):
-        mat = np.delete(mat, -1, axis=1) # Remove last to match spectrogram shape
 
-    # Check if is smaller than the standard length:
-    if(mat.shape[1] < n_seps):
-        colMissing = n_seps - mat.shape[1]
-        matZeros = np.zeros((len(speciesList), colMissing))
-        
-        # Concatenate original matrix with the submatrix of 0s
-        mat = np.concatenate((mat, matZeros), axis=1)
+    mat = np.transpose(mat) # Transpose
+   
+    # Check if is bigger than the standard length:
+    if(mat.shape[1] > n_seps):
+        mat = mat[:, 0:n_seps]
         
     # Print info (can be commented)
     # print(mat, " (", mat.shape, ")", type(mat))
@@ -322,8 +319,15 @@ def separate_annot(dataframe, clip_win, clip_hop):
     return df_red_list, valid_starts
  
 def plotAnnotMatrix(annot):
-    plt.figure()
-    sns.heatmap(annot)
+
+    fig, ax = plt.subplots(1, 1)
+
+    #Display with vertical lines on the heat map (right side)
+    sns.heatmap(annot, vmin=0, vmax=5, ax=ax)
+    # ax.axvline(x=1, linewidth=2, color="w")
+    # ax.axvline(x=2, linewidth=2, color="w")
+    # ax.axvline(x=3, linewidth=2, color="w")
+    # ax.axvline(x=4, linewidth=2, color="w")
     plt.show()
 
 def plotSpec(S):
@@ -376,11 +380,11 @@ def splitAudio(filePath, start_pts):
 
 # Folders and paths 
 audioFold = "../data/dryad/audio/Recording_1/"
-audioFolds = ["../data/dryad/audio/Recording_1/"]#, "../data/dryad/audio/Recording_2/", 
+audioFolds = ["../data/dryad/audio/Recording_3/"]#, "../data/dryad/audio/Recording_2/", 
                 # "../data/dryad/audio/Recording_3/","../data/dryad/audio/Recording_4/"]
 
 annotFold = "../data/dryad/annotation/Recording_1/"
-annotFolds = ["../data/dryad/annotation/Recording_1/"]#, "../data/dryad/annotation/Recording_2/", 
+annotFolds = ["../data/dryad/annotation/Recording_3/"]#, "../data/dryad/annotation/Recording_2/", 
                 # "../data/dryad/annotation/Recording_3/","../data/dryad/annotation/Recording_4/"]
 
 audioList = os.listdir(audioFold)
@@ -396,7 +400,7 @@ orig_speciesList = ['AMCR', 'AMGO' , 'AMRE', 'AMRO', 'BAOR', 'BAWW', 'BBWA', 'BC
                 'WBNU', 'WITU',	'WOTH', 'YBCU']
 
 # Species that have very few activations - TO BE REMOVED FROM CONSIDERATION 
-time_thres = 10 # Minimum number of activations to be valid
+time_thres = 100 # Minimum number of activations to be valid
 rmSpec = del_low_spec(time_thres)
 speciesList = purge_species()
 
@@ -412,7 +416,7 @@ clip_hop = 2.5
 win_len = 1024
 hop_len = 512
 sr = 32000
-n_mels = 40
+n_mels = 128
 
 # Other properties
 n_files = 10000
