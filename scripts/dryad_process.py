@@ -2,6 +2,7 @@ import os
 import pandas as pd 
 import numpy as np
 from pydub import AudioSegment
+from pydub.playback import play
 import librosa 
 import librosa.display
 import matplotlib.pyplot as plt
@@ -89,7 +90,7 @@ def generateDataset(n_files, polyphony):
         chosenIndex = chooseRandomFiles(polyphony)
 
         ##### MERGE AUDIOS #####
-        finalAudio = mergeAudios(chosenIndex)
+        finalAudio, toPlay = mergeAudios(chosenIndex)
 
         ##### MERGE ANNOTS #####
         finalAnnot = mergeAnnots(chosenIndex)
@@ -105,23 +106,27 @@ def generateDataset(n_files, polyphony):
         ##### CHECK IF MATCHING DESIRED OVERLAPPING #####
         if(finalOv <= polyphony): # Take only files with less or equal polyphony as desired
             count += 1
-            # print("Generating dataset: {} out of {} ({} %)".format(count, n_files, (100*count/n_files)), end='\r')
+            print("Generating dataset: {} out of {} ({} %)".format(count, n_files, (100*count/n_files)), end='\r')
 
             ##### PRINTS #####
-            # plotSpec(feat)
-            # plotAnnotMatrix(inputMatrix)
+            # plotSpec_and_Annot(feat, inputMatrix)
+            # play(toPlay)
 
             ##### NORMALIZE FEATURE #####
             feat = normalize_data(feat.T)
             
             ##### APPEND TO DATASET LIST ###### 
+            feat.astype(np.float32)
+            inputMatrix.astype(np.float32)
             inFeat.append(feat)
             inAnnot.append(inputMatrix.T)
 
     inFeat = np.array(inFeat)
     inAnnot = np.array(inAnnot)
+
     print("In shape: ", inFeat[0].shape, "(", type(inFeat[0]), ")")
     print("Out shape: ", inAnnot[0].shape, "(", type(inAnnot[0]), ")")
+
     return inFeat, inAnnot
 
 def get_all_annot_and_feat():
@@ -184,10 +189,18 @@ def getInputMatrix(df, n_seps):
     # Check if is bigger than the standard length:
     if(mat.shape[1] > n_seps):
         mat = mat[:, 0:n_seps]
+
+    # Check if is smaller than the standard length:
+    if(mat.shape[1] < n_seps):
+        colMissing = n_seps - mat.shape[1]
+        matZeros = np.zeros((len(speciesList), colMissing))
         
+        # Concatenate original matrix with the submatrix of 0s
+        mat = np.concatenate((mat, matZeros), axis=1)
+
     # Print info (can be commented)
     # print(mat, " (", mat.shape, ")", type(mat))
- 
+    
     return mat
 
 def getMelSpectrogram(audioSegment):
@@ -240,7 +253,9 @@ def mergeAudios(audioList): # Merge from audio list and generate an AudioSegment
     # Merge every recording in the list into final audio
     for i in audioList:
         finalAudio = finalAudio.overlay(audioAll[i], position=0)
-    
+
+    toPlay = finalAudio
+
     samples = finalAudio.get_array_of_samples()
     finalAudio = np.array(samples).astype(np.float32)
     
@@ -253,7 +268,7 @@ def mergeAudios(audioList): # Merge from audio list and generate an AudioSegment
     ])
     # finalAudio = augment(samples=finalAudio, sample_rate=sr)
 
-    return finalAudio 
+    return finalAudio, toPlay
 
 def normalize_data(feature):
     stdScal = preprocessing.StandardScaler()
@@ -276,7 +291,7 @@ def separate_annot(dataframe, clip_win, clip_hop):
         mini_df = pd.DataFrame(columns=['event_onset', 'event_offset', 'event_label'])
         red_df = pd.DataFrame(columns=['event_onset', 'event_offset', 'event_label'])
         # Check if previous 'overflow'
-        if(len(cut_row) != 0):
+        if(len(cut_row) != 0 and row['event_label'] in speciesList):
             for r in cut_row:
                 mini_df = mini_df.append(r, ignore_index=True)
                 # Reduced DF
@@ -286,7 +301,7 @@ def separate_annot(dataframe, clip_win, clip_hop):
         cut_row = []
         for index, row in dataframe.iterrows():
             # Check starting and ending times 
-            if(row['event_label'] not in rmSpec): # Use only acceptable species
+            if(row['event_label'] in speciesList): # Use only acceptable species
                 if(row['event_onset'] >= start_pts[sec_id]):
                     if(row['event_offset'] <= end_pts[sec_id]):
                         mini_df = mini_df.append(row, ignore_index=True)
@@ -331,7 +346,6 @@ def plotAnnotMatrix(annot):
     plt.show()
 
 def plotSpec(S):
-    sr = 22050
     fig, ax = plt.subplots()
     # S_dB = librosa.power_to_db(S, ref=np.max)
     img = librosa.display.specshow(S, x_axis='time',
@@ -339,6 +353,24 @@ def plotSpec(S):
                             fmax=8000, ax=ax)
     fig.colorbar(img, ax=ax, format='%+2.0f dB')
     ax.set(title='Mel-frequency spectrogram')
+    plt.show()
+
+def plotSpec_and_Annot(S, annot):
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    
+    # Spec
+    img = librosa.display.specshow(S, x_axis='time',
+                            y_axis='mel', sr=sr,
+                            fmax=8000, ax=ax1)
+    fig.colorbar(img, ax=ax1, format='%+2.0f dB')
+    ax1.set(title='Mel-frequency spectrogram')
+    
+    # Annot
+    sns.heatmap(annot, vmin=0, vmax=5, ax=ax2)
+    # ax.axvline(x=1, linewidth=2, color="w")
+    # ax.axvline(x=2, linewidth=2, color="w")
+    # ax.axvline(x=3, linewidth=2, color="w")
+    # ax.axvline(x=4, linewidth=2, color="w")
     plt.show()
 
 def purge_species():
@@ -394,10 +426,10 @@ annotList.sort()
 
 # COMPLETE LIST OF SPECIES 
 orig_speciesList = ['AMCR', 'AMGO' , 'AMRE', 'AMRO', 'BAOR', 'BAWW', 'BBWA', 'BCCH', 'BGGN', 'BHCO', 'BHVI', 
-                'BLJA', 'BRCR', 'BTNW', 'BWWA', 'CANG', 'CARW', 'CEDW', 'CORA', 'COYE', 'CSWA', 'DOWO', 
-                'EATO', 'EAWP', 'HAWO', 'HETH', 'HOWA', 'KEWA', 'LOWA', 'NAWA', 'NOCA', 'NOFL', 'OVEN', 
-                'PIWO', 'RBGR', 'RBWO', 'RCKI', 'REVI', 'RSHA',	'RWBL', 'SCTA',	'SWTH', 'TUTI',	'VEER', 
-                'WBNU', 'WITU',	'WOTH', 'YBCU']
+                    'BLJA', 'BRCR', 'BTNW', 'BWWA', 'CANG', 'CARW', 'CEDW', 'CORA', 'COYE', 'CSWA', 'DOWO', 
+                    'EATO', 'EAWP', 'HAWO', 'HETH', 'HOWA', 'KEWA', 'LOWA', 'NAWA', 'NOCA', 'NOFL', 'OVEN', 
+                    'PIWO', 'RBGR', 'RBWO', 'RCKI', 'REVI', 'RSHA',	'RWBL', 'SCTA',	'SWTH', 'TUTI',	'VEER', 
+                    'WBNU', 'WITU',	'WOTH', 'YBCU']
 
 # Species that have very few activations - TO BE REMOVED FROM CONSIDERATION 
 time_thres = 100 # Minimum number of activations to be valid
@@ -405,7 +437,9 @@ rmSpec = del_low_spec(time_thres)
 speciesList = purge_species()
 
 print("ELIM:", len(rmSpec))
+print(rmSpec)
 print("REMAINING: ", len(speciesList))
+print(speciesList)
 
 # Audio length properties
 dur = 300 # In seconds (=5min)
@@ -418,10 +452,6 @@ hop_len = 512
 sr = 32000
 n_mels = 128
 
-# Other properties
-n_files = 10000
-polyphony = 3
-
 # Generate features and annotations
 # a, b = separate_annot(getTXT_DF(annotFold+annotList[2]), clip_win, clip_hop)
 # print(getTXT_DF(annotFold+annotList[2]))
@@ -430,5 +460,5 @@ polyphony = 3
 # Create all clips and annotations from oiginal files
 audioAll, annotAll = get_all_annot_and_feat()
 print("FINAL LENGTH: ", len(audioAll), len(annotAll))
-generateDataset(10, 3)
+# feats, annots = generateDataset(100, 3)
 

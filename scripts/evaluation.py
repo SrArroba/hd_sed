@@ -5,6 +5,8 @@ import math
 import sed_eval
 import dcase_util
 import processing
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 def getCSV_DF(csvFile):
     columnNames = ['event_onset','event_duration', 'event_label']
@@ -93,9 +95,9 @@ def from_InputDF_to_SELDF(inputDF):
     
     return selDF      
 
-def from_annotMatrix_to_annotDF(inputMatrix):
+def from_annotMatrix_to_annotDF(inputMatrix, labels):
     # Rows index 
-    rowNames = getLabelList()
+    rowNames = labels
 
     # Column "names"
     n_frames = inputMatrix.shape[1]
@@ -149,10 +151,10 @@ def get_score(output, truth):
 
     return f1, er
 
-def sed_eval_scores(pred, truth): # Prediction and truth must be already reshaped and re-transposed
+def sed_eval_scores(pred, truth, labels): # Prediction and truth must be already reshaped and re-transposed
     # Transform to binary matrix Dataframe
-    pred_DF = from_annotMatrix_to_annotDF(pred)
-    truth_DF = from_annotMatrix_to_annotDF(truth)
+    pred_DF = from_annotMatrix_to_annotDF(pred, labels)
+    truth_DF = from_annotMatrix_to_annotDF(truth, labels)
     
     # Transform reference matrix (binary) into event list 
     pred_events = from_InputDF_to_SELDF(pred_DF)
@@ -168,11 +170,11 @@ def sed_eval_scores(pred, truth): # Prediction and truth must be already reshape
 
     # Get Segment and Event metrics
     segment_based_metrics = sed_eval.sound_event.SegmentBasedMetrics(
-        event_label_list=getLabelList(),
+        event_label_list=labels,
         time_resolution=1.0
     )
     event_based_metrics = sed_eval.sound_event.EventBasedMetrics(
-        event_label_list=getLabelList(),
+        event_label_list=labels,
         t_collar=0.250
     )
 
@@ -193,6 +195,31 @@ def sed_eval_scores(pred, truth): # Prediction and truth must be already reshape
 
     return overall_event_based_metrics, overall_segment_based_metrics
 
+def plotPredTruth(pred, pred_nothres, truth, labels):
+    # Transform to DF
+    pred = from_annotMatrix_to_annotDF(pred, labels)
+    pred_nothres = from_annotMatrix_to_annotDF(pred_nothres, labels)
+    pred_nothres = pred_nothres.to_numpy()
+    truth = from_annotMatrix_to_annotDF(truth, labels)
+    
+
+    # Plot
+    plt.rcParams["figure.figsize"] = [7.50, 3.50]
+    plt.rcParams["figure.autolayout"] = True
+
+    fig, (ax1, ax2, ax3) = plt.subplots(ncols=3)
+    ax1.set_title("Prediction binary")
+    ax2.set_title("Prediction w/o threshold")
+    ax3.set_title("Truth")
+    fig.subplots_adjust(wspace=0.01)
+
+    sns.heatmap(pred, cmap="viridis", ax=ax1, cbar=False)
+    sns.heatmap(pred_nothres, cmap="viridis", ax=ax2, cbar=False)
+    sns.heatmap(truth, cmap="viridis", ax=ax3, cbar=False)
+
+    fig.subplots_adjust(wspace=0.001)
+    plt.show()
+
 ################################################################
 bin_thres = 0.5
 segment_len = 1
@@ -200,27 +227,27 @@ eps = np.finfo(float).eps
 stdDuration = 5
 sep = 431
 
-annotFolder = "../data/nips4b/annotations/"
-annot1 = annotFolder+"010.csv"
-annot2 = annotFolder+"020.csv"
-mergedAnn = "../data/nips4b/mergedAnnotations/612_010.csv"
+# annotFolder = "../data/nips4b/annotations/"
+# annot1 = annotFolder+"010.csv"
+# annot2 = annotFolder+"020.csv"
+# mergedAnn = "../data/nips4b/mergedAnnotations/612_010.csv"
 
-df1 = getCSV_DF(annot1)
-df2 = getCSV_DF(annot2)
-# dfMerged = getCSV_DF(mergedAnn)
+# df1 = getCSV_DF(annot1)
+# df2 = getCSV_DF(annot2)
+# # dfMerged = getCSV_DF(mergedAnn)
 
-input1 = getInputMatrix(df1, sep)
-input2 = getInputMatrix(df2, sep)
-# mInput = getInputMatrix(dfMerged, sep)
+# input1 = getInputMatrix(df1, sep)
+# input2 = getInputMatrix(df2, sep)
+# # mInput = getInputMatrix(dfMerged, sep)
 
-inDF1 = from_annotMatrix_to_annotDF(input1)
+# inDF1 = from_annotMatrix_to_annotDF(input1)
 
-altDF1 = from_InputDF_to_SELDF(inDF1)
+# altDF1 = from_InputDF_to_SELDF(inDF1)
 
 # altDF2 = from_InputDF_to_SELDF(input2)
 
-f1_ev = sed_eval_scores(input1,input1)[1]['f_measure']['f_measure']
-er_ev = sed_eval_scores(input1,input1)[1]['error_rate']['error_rate']
+# f1_ev = sed_eval_scores(input1,input1)[1]['f_measure']['f_measure']
+# er_ev = sed_eval_scores(input1,input1)[1]['error_rate']['error_rate']
 
 # processing.plotPredTruth(from_annotMatrix_to_annotDF(input1),from_annotMatrix_to_annotDF(input1))
 # print(f1_score_all(test1, test2))

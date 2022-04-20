@@ -22,7 +22,7 @@ from tensorflow.keras.optimizers import schedules, Adam, SGD
 # Local imports 
 import processing
 import dryad_process
-from evaluation import f1_score_all, er_all, get_score, sed_eval_scores
+from evaluation import f1_score_all, er_all, get_score, sed_eval_scores, plotPredTruth
 
 
 ########################################################################
@@ -31,8 +31,9 @@ from evaluation import f1_score_all, er_all, get_score, sed_eval_scores
 def generate_sets(n_files, polyphony):
     # Generate entire dataset
     # train_x, train_y = processing.generateDataset(n_files, polyphony)
+    # print("NIPS: ", train_x.ndim, train_x[0].shape, type(train_x[0]), train_x[0].ndim, train_y[0].shape, type(train_y[0]), train_y[0].ndim)
     train_x, train_y = dryad_process.generateDataset(n_files, polyphony)
-   
+    print("DRYAD: ", train_x.ndim, train_x[0].shape, type(train_x[0]), train_x[0].ndim, train_y[0].shape, type(train_y[0]), train_y[0].ndim)
     # Separate into validation and training sets
     X_train, X_test, y_train, y_test = train_test_split(train_x, train_y, test_size=0.1, random_state=42)
 
@@ -42,7 +43,14 @@ def generate_sets(n_files, polyphony):
     return X_train, X_test, y_train, y_test
 
 def preprocess(X_train, X_test, y_train, y_test):
-    
+    X_train = np.array([np.array(val, dtype='float') for val in X_train])
+    y_train = np.array([np.array(val, dtype='float') for val in y_train])
+    X_test = np.array([np.array(val, dtype='float') for val in X_test])
+    y_test = np.array([np.array(val, dtype='float') for val in y_test])
+
+    # for i in range(len(X_train)):
+    #     print("TRAIN: ", X_train[i].shape, type(X_train[i]), " --> ", y_train[i].shape, type(y_train[i]))
+
     # Reshape sets: (length of set, frames, mels, 1)
     X_train = X_train.reshape(len(X_train), X_train[0].shape[0], X_train[0].shape[1], 1)
     X_test = X_test.reshape(len(X_test), X_train[0].shape[0], X_train[0].shape[1], 1)
@@ -107,23 +115,23 @@ def train_model(model, X_train, X_test, y_train, y_test):
 # Main values
 n_classes = 20
 
-n_files = 10
+n_files = 100
 polyphony = 3
 
 threshold = 0.5 # To create binary output matrix
 
 #### Model params ####
-epochs = 100
-drop_rate = 0.0
+epochs = 200
+drop_rate = 0.5
 batch_size = 128 # Batch size
 
 # Convolutional params 
-filt_list = [128, 128, 128, 256]
-pool_list = [2, 2, 2, 2]
+filt_list = [64, 128, 128, 128, 256]
+pool_list = [5, 2, 2, 2, 2]
 # Recurrent params 
 rnn_nodes = [128, 128]
 # FC 
-hid_nodes = [64, 64]
+hid_nodes = [128, 128]
 ########################################################################
 
 #### Sets separation ####
@@ -138,14 +146,14 @@ print("OUTPUT SIZE: ", y_train[0].shape)
 
 #### Create model // Load model ####
 model = create_model(in_shape, out_shape)
-# model = load_model('spec_no_dropout.h5')
+model = load_model('dryad_day1_o6.h5')
 print(model.summary())
 
 # Train 
-train_model(model, X_train, X_test, y_train, y_test)
+# train_model(model, X_train, X_test, y_train, y_test)
 
 # Save model
-# model.save('spec_no_dropout.h5')  # HDF5 file 
+# model.save('dryad_day1_o3.h5')  # HDF5 file 
 
 ###############################################
 
@@ -161,7 +169,12 @@ cnt = 0
 for elem in X_test:
     elem = elem.reshape(1, in_shape[-3], in_shape[-2], in_shape[-1])
     prediction = model.predict(elem)
-    # print("Max value no Binary: ", np.amax(prediction))
+
+    predNoThres = prediction.reshape(out_shape[-2], out_shape[-1])
+    for row in predNoThres:
+        for i in row:
+            print("{:.2f}".format(round(i, 2)))    
+    
     predBinary = processing.output_to_binary(prediction, threshold)
     predBinary = predBinary.reshape(out_shape[-2], out_shape[-1])
 
@@ -172,10 +185,11 @@ for elem in X_test:
     ers.append(er)
 
     # SED_EVAL library scores
-    f1_ev = sed_eval_scores(predBinary.T, y_test[cnt].T)[0]['f_measure']['f_measure']
-    er_ev = sed_eval_scores(predBinary.T, y_test[cnt].T)[0]['error_rate']['error_rate']
-    f1_seg = sed_eval_scores(predBinary.T, y_test[cnt].T)[1]['f_measure']['f_measure']
-    er_seg = sed_eval_scores(predBinary.T, y_test[cnt].T)[1]['error_rate']['error_rate']
+    scores = sed_eval_scores(predBinary.T, y_test[cnt].T, dryad_process.speciesList)
+    f1_ev = scores[0]['f_measure']['f_measure']
+    er_ev = scores[0]['error_rate']['error_rate']
+    f1_seg = scores[1]['f_measure']['f_measure']
+    er_seg = scores[1]['error_rate']['error_rate']
     
     sedeval_f1_event.append(f1_ev)
     sedeval_er_event.append(er_ev)
@@ -183,7 +197,9 @@ for elem in X_test:
     sedeval_er_seg.append(er_seg)
 
     # PLOT PRED TRUTH FEATURE
-    # processing.plotPredTruth(predBinary.T, y_test[cnt].T)
+    print("F1 and ER: ", f1, er)
+    #sns.heatmap(predNoThres.T, cbar=True)
+    plotPredTruth(predBinary.T, predNoThres.T, y_test[cnt].T, dryad_process.speciesList)
     cnt += 1
 
 print("F1s: ", f1s)
