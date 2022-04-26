@@ -111,10 +111,6 @@ def from_annotMatrix_to_annotDF(inputMatrix, labels):
     return annotDF
 
 def f1_score_all(output, truth):
-    # output = processing.output_to_binary(output, bin_thres).T
-    # output = output.reshape(output.shape[-2], output.shape[-1])
-    # truth = processing.output_to_binary(truth, bin_thres).T
-
     TP = ((2*truth-output) == 1).sum()  
     FP = np.logical_and(truth==0, output==1).sum()
     FN = np.logical_and(truth==1, output==0).sum()       
@@ -129,10 +125,6 @@ def f1_score_all(output, truth):
     return f1
 
 def er_all(output, truth):
-    # output = processing.output_to_binary(output, bin_thres).T
-    # output = output.reshape(output.shape[-2], output.shape[-1])
-    # truth = processing.output_to_binary(truth, bin_thres).T
-
     FP = np.logical_and(truth==0, output==1).sum()
     FN = np.logical_and(truth==1, output==0).sum()
 
@@ -173,9 +165,10 @@ def sed_eval_scores(pred, truth, labels): # Prediction and truth must be already
         event_label_list=labels,
         time_resolution=1.0
     )
+    t_collar = 5/truth.shape[1]
     event_based_metrics = sed_eval.sound_event.EventBasedMetrics(
         event_label_list=labels,
-        t_collar=0.250
+        t_collar=t_collar
     )
 
     # Evaluate 
@@ -197,58 +190,59 @@ def sed_eval_scores(pred, truth, labels): # Prediction and truth must be already
 
 def plotPredTruth(pred, pred_nothres, truth, labels):
     # Transform to DF
-    pred = from_annotMatrix_to_annotDF(pred, labels)
     pred_nothres = from_annotMatrix_to_annotDF(pred_nothres, labels)
-    pred_nothres = pred_nothres.to_numpy()
+    pred = from_annotMatrix_to_annotDF(pred, labels)
     truth = from_annotMatrix_to_annotDF(truth, labels)
     
 
     # Plot
-    plt.rcParams["figure.figsize"] = [7.50, 3.50]
+    plt.rcParams["figure.figsize"] = [11.50, 5.50]
     plt.rcParams["figure.autolayout"] = True
 
     fig, (ax1, ax2, ax3) = plt.subplots(ncols=3)
-    ax1.set_title("Prediction binary")
-    ax2.set_title("Prediction w/o threshold")
+    ax1.set_title("Prediction w/o threshold")
+    ax2.set_title("Prediction binary")
     ax3.set_title("Truth")
     fig.subplots_adjust(wspace=0.01)
 
-    sns.heatmap(pred, cmap="viridis", ax=ax1, cbar=False)
-    sns.heatmap(pred_nothres, cmap="viridis", ax=ax2, cbar=False)
-    sns.heatmap(truth, cmap="viridis", ax=ax3, cbar=False)
+    temp_ticks = "auto"
+    sns.heatmap(pred_nothres, cmap="viridis", xticklabels=temp_ticks, yticklabels=labels, ax=ax1, cbar=False)
+    sns.heatmap(pred, cmap="viridis", xticklabels=temp_ticks, yticklabels=labels, ax=ax2, cbar=False)
+    sns.heatmap(truth, cmap="viridis", xticklabels=temp_ticks, yticklabels=labels, ax=ax3, cbar=False)
 
     fig.subplots_adjust(wspace=0.001)
     plt.show()
 
+def plotTruth(truth, labels):
+    # Transform to DF
+    truth = from_annotMatrix_to_annotDF(truth, labels)
+    
+    # Plot
+    plt.rcParams["figure.figsize"] = [10.50, 5.50]
+    plt.rcParams["figure.autolayout"] = True
+
+    fig, ax= plt.subplots(ncols=1, nrows=1)
+    ax.set_title("Truth")
+
+    temp_ticks = np.arange(0, 6, step=1)
+    sns.heatmap(truth, cmap="viridis", xticklabels=temp_ticks, yticklabels=labels, ax=ax, cbar=False)
+
+    plt.show()
+
+def plotPred(pred, labels):
+    # Transform to DF
+    pred = from_annotMatrix_to_annotDF(pred, labels)
+    
+    # Plot
+    plt.rcParams["figure.figsize"] = [10.50, 5.50]
+    plt.rcParams["figure.autolayout"] = True
+
+    temp_ticks = np.arange(0, 6, step=1)
+    sns.heatmap(pred, cmap="viridis", yticklabels=labels, cbar=False)
+
+    plt.show()
 ################################################################
 bin_thres = 0.5
 segment_len = 1
 eps = np.finfo(float).eps
 stdDuration = 5
-sep = 431
-
-# annotFolder = "../data/nips4b/annotations/"
-# annot1 = annotFolder+"010.csv"
-# annot2 = annotFolder+"020.csv"
-# mergedAnn = "../data/nips4b/mergedAnnotations/612_010.csv"
-
-# df1 = getCSV_DF(annot1)
-# df2 = getCSV_DF(annot2)
-# # dfMerged = getCSV_DF(mergedAnn)
-
-# input1 = getInputMatrix(df1, sep)
-# input2 = getInputMatrix(df2, sep)
-# # mInput = getInputMatrix(dfMerged, sep)
-
-# inDF1 = from_annotMatrix_to_annotDF(input1)
-
-# altDF1 = from_InputDF_to_SELDF(inDF1)
-
-# altDF2 = from_InputDF_to_SELDF(input2)
-
-# f1_ev = sed_eval_scores(input1,input1)[1]['f_measure']['f_measure']
-# er_ev = sed_eval_scores(input1,input1)[1]['error_rate']['error_rate']
-
-# processing.plotPredTruth(from_annotMatrix_to_annotDF(input1),from_annotMatrix_to_annotDF(input1))
-# print(f1_score_all(test1, test2))
-# print(er_all(test1, test2))

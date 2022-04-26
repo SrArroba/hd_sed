@@ -74,7 +74,7 @@ def del_low_spec(t):
     removeSpec = []
     # print("Density list: ")
     for i in range(len(speciesCount)):
-        # print(speciesList[i], " --> ", int(speciesCount[i]))
+        # print(orig_speciesList[i], " --> ", int(speciesCount[i]))
         if(int(speciesCount[i]) < t):
             removeSpec.append(orig_speciesList[i])
     
@@ -110,7 +110,9 @@ def generateDataset(n_files, polyphony):
 
             ##### PRINTS #####
             # plotSpec_and_Annot(feat, inputMatrix)
+            # plotSpec(feat)
             # play(toPlay)
+            # toPlay.export("./samples/testing.wav", format="wav")
 
             ##### NORMALIZE FEATURE #####
             feat = normalize_data(feat.T)
@@ -255,7 +257,6 @@ def mergeAudios(audioList): # Merge from audio list and generate an AudioSegment
         finalAudio = finalAudio.overlay(audioAll[i], position=0)
 
     toPlay = finalAudio
-
     samples = finalAudio.get_array_of_samples()
     finalAudio = np.array(samples).astype(np.float32)
     
@@ -412,12 +413,12 @@ def splitAudio(filePath, start_pts):
 
 # Folders and paths 
 audioFold = "../data/dryad/audio/Recording_1/"
-audioFolds = ["../data/dryad/audio/Recording_3/"]#, "../data/dryad/audio/Recording_2/", 
-                # "../data/dryad/audio/Recording_3/","../data/dryad/audio/Recording_4/"]
+audioFolds = ["../data/dryad/audio/Recording_1/", "../data/dryad/audio/Recording_2/", 
+                "../data/dryad/audio/Recording_3/","../data/dryad/audio/Recording_4/"]
 
 annotFold = "../data/dryad/annotation/Recording_1/"
-annotFolds = ["../data/dryad/annotation/Recording_3/"]#, "../data/dryad/annotation/Recording_2/", 
-                # "../data/dryad/annotation/Recording_3/","../data/dryad/annotation/Recording_4/"]
+annotFolds = ["../data/dryad/annotation/Recording_1/", "../data/dryad/annotation/Recording_2/", 
+                "../data/dryad/annotation/Recording_3/","../data/dryad/annotation/Recording_4/"]
 
 audioList = os.listdir(audioFold)
 annotList = os.listdir(annotFold)
@@ -435,8 +436,8 @@ orig_speciesList = ['AMCR', 'AMGO' , 'AMRE', 'AMRO', 'BAOR', 'BAWW', 'BBWA', 'BC
 time_thres = 100 # Minimum number of activations to be valid
 rmSpec = del_low_spec(time_thres)
 speciesList = purge_species()
-
-print("ELIM:", len(rmSpec))
+print("FINAL SPECIES LIST: ")
+print("ELIMINATED:", len(rmSpec))
 print(rmSpec)
 print("REMAINING: ", len(speciesList))
 print(speciesList)
@@ -459,6 +460,6 @@ n_mels = 128
 
 # Create all clips and annotations from oiginal files
 audioAll, annotAll = get_all_annot_and_feat()
-print("FINAL LENGTH: ", len(audioAll), len(annotAll))
+# print("FINAL LENGTH: ", len(audioAll), len(annotAll))
 # feats, annots = generateDataset(100, 3)
 

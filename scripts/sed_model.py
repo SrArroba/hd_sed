@@ -1,4 +1,5 @@
 import pandas as pd
+from IPython.display import display
 import numpy as np
 import seaborn as sns
 # Plotting 
@@ -33,7 +34,7 @@ def generate_sets(n_files, polyphony):
     # train_x, train_y = processing.generateDataset(n_files, polyphony)
     # print("NIPS: ", train_x.ndim, train_x[0].shape, type(train_x[0]), train_x[0].ndim, train_y[0].shape, type(train_y[0]), train_y[0].ndim)
     train_x, train_y = dryad_process.generateDataset(n_files, polyphony)
-    print("DRYAD: ", train_x.ndim, train_x[0].shape, type(train_x[0]), train_x[0].ndim, train_y[0].shape, type(train_y[0]), train_y[0].ndim)
+
     # Separate into validation and training sets
     X_train, X_test, y_train, y_test = train_test_split(train_x, train_y, test_size=0.1, random_state=42)
 
@@ -113,22 +114,22 @@ def train_model(model, X_train, X_test, y_train, y_test):
 ############################## PARAMETERS ##############################
 
 # Main values
-n_classes = 20
+n_classes = 200
 
-n_files = 100
-polyphony = 3
+n_files = 20
+polyphony = 6
 
 threshold = 0.5 # To create binary output matrix
 
 #### Model params ####
-epochs = 200
+epochs = 120
 drop_rate = 0.5
 batch_size = 128 # Batch size
 
 # Convolutional params 
 filt_list = [64, 128, 128, 128, 256]
 pool_list = [5, 2, 2, 2, 2]
-# Recurrent params 
+# Recurrent params  
 rnn_nodes = [128, 128]
 # FC 
 hid_nodes = [128, 128]
@@ -139,7 +140,7 @@ X_train, X_test, y_train, y_test = generate_sets(n_files, polyphony)
 
 in_shape = X_train[0].shape
 out_shape = y_train[0].shape
-print("INPUT SIZE: ", X_train[0].shape)
+print("\nINPUT SIZE: ", X_train[0].shape)
 print("OUTPUT SIZE: ", y_train[0].shape)
 
 ###############################################
@@ -153,37 +154,62 @@ print(model.summary())
 # train_model(model, X_train, X_test, y_train, y_test)
 
 # Save model
-# model.save('dryad_day1_o3.h5')  # HDF5 file 
+# model.save('dryad_day1_o10.h5')  # HDF5 file 
 
 ###############################################
 
 # Prediction
-print("Generate a prediction")
+print("\nGenerating a prediction...")
 sedeval_f1_event = []
 sedeval_f1_seg = []
 sedeval_er_event = []
 sedeval_er_seg = []
 f1s = []
 ers = []
+f1s_o3 = []
+ers_o3 = []
+f1s_o6 = []
+ers_o6 = []
+f1s_o10 = []
+ers_o10 = []
+f1s_class = []
+ers_class = []
 cnt = 0
 for elem in X_test:
     elem = elem.reshape(1, in_shape[-3], in_shape[-2], in_shape[-1])
     prediction = model.predict(elem)
 
-    predNoThres = prediction.reshape(out_shape[-2], out_shape[-1])
-    for row in predNoThres:
-        for i in row:
-            print("{:.2f}".format(round(i, 2)))    
-    
+    # Prepare prediction, thresholded prediction and ground truth for evaluation
+    predNoThres = prediction.reshape(out_shape[-2], out_shape[-1])    
+    predNoThres = np.array(predNoThres)
     predBinary = processing.output_to_binary(prediction, threshold)
     predBinary = predBinary.reshape(out_shape[-2], out_shape[-1])
 
+    ov = processing.countOverlap(y_test[cnt].T)
 
     #### Evaluation Metrics #### 
     f1, er = get_score(predBinary.T, y_test[cnt].T)
     f1s.append(f1)
     ers.append(er)
 
+    if(ov == 3): 
+        f1s_o3.append(f1)
+        ers_o3.append(er)
+    if(ov == 6): 
+        f1s_o6.append(f1)
+        ers_o6.append(er)
+    if(ov == 10): 
+        f1s_o10.append(f1)
+        ers_o10.append(er)
+
+    # Species based score - UNCOMMNET FOR CLASS BASED METRICS (WIP)
+    # predBinClass = predBinary.T[10,:] #EATO row
+    # truthClass = y_test[cnt].T[10,:]
+
+    # f1_class, er_class = get_score(predBinClass, truthClass)
+
+    # f1s_class.append(f1_class)
+    # ers_class.append(er_class)
     # SED_EVAL library scores
     scores = sed_eval_scores(predBinary.T, y_test[cnt].T, dryad_process.speciesList)
     f1_ev = scores[0]['f_measure']['f_measure']
@@ -197,16 +223,34 @@ for elem in X_test:
     sedeval_er_seg.append(er_seg)
 
     # PLOT PRED TRUTH FEATURE
-    print("F1 and ER: ", f1, er)
-    #sns.heatmap(predNoThres.T, cbar=True)
-    plotPredTruth(predBinary.T, predNoThres.T, y_test[cnt].T, dryad_process.speciesList)
+    # print("File with polyphony: ", ov)
+    # print("F1 and ER (manual): ", f1, er)
+    # print("F1 and ER sed_eval: ", f1_seg, er_seg)
+    # sns.heatmap(predNoThres.T, cbar=True)
+    # plotPredTruth(predBinary.T, predNoThres.T, y_test[cnt].T, dryad_process.speciesList)
     cnt += 1
 
-print("F1s: ", f1s)
-print("Mean F1: ", np.mean(f1s))
-print("Mean ER: ", np.mean(ers))
+print("\nF1s: ", f1s)
+print("ERs: ", ers)
+###### UNCOMMENT FOR METRICS OF 3, 6 and 10 polyphony
+# print("Mean F1 (3): ", np.mean(f1s_o3), np.std(f1s_o3))
+# print("Mean ER (3): ", np.mean(ers_o3), np.std(ers_o3))
+# print("Mean F1 (6): ", np.mean(f1s_o6), np.std(f1s_o6))
+# print("Mean ER (6): ", np.mean(ers_o6), np.std(ers_o6))
+# print("Mean F1 (10): ", np.mean(f1s_o10), np.std(f1s_o10))
+# print("Mean ER (10): ", np.mean(ers_o10), np.std(ers_o10))
+# print("Mean F1 (All): ", np.mean(f1s), np.std(f1s))
+# print("Mean ER (All): ", np.mean(ers), np.std(ers))
 
-print("SED EVAL VALUES: ")
-print("F1s: ", sedeval_f1_event)
-print("Mean F1: ", np.mean(sedeval_f1_event))
-print("Mean ER: ", np.mean(sedeval_er_event))
+
+##### UNCOMMENT FOR CLASS BASED METRICS 
+#### Change class 
+# print("CLASS BASED")
+# print("Mean F1 class: ", np.mean(f1s_class), np.std(f1s_class))
+# print("Mean ER class: ", np.mean(ers_class), np.std(ers_class))
+
+#
+# print("SED EVAL VALUES SEGMENT BASED: ")
+# print("F1s: ", sedeval_f1_seg)
+# print("Mean F1: ", np.mean(sedeval_f1_seg), np.std(sedeval_f1_seg))
+# print("Mean ER: ", np.mean(sedeval_er_seg), np.std(sedeval_er_seg))
