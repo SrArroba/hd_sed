@@ -1,5 +1,6 @@
 import os 
 import pandas as pd 
+from IPython.display import display
 import numpy as np 
 import math
 import sed_eval
@@ -7,6 +8,9 @@ import dcase_util
 import processing
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
+
+import dryad_process
 
 def getCSV_DF(csvFile):
     columnNames = ['event_onset','event_duration', 'event_label']
@@ -133,7 +137,10 @@ def er_all(output, truth):
     I = np.maximum(0, FP-FN).sum()
 
     nr = truth.sum()
-    ER = (S+D+I) / (nr + 0.0)
+    if (nr > 0):
+        ER = (S+D+I) / (nr + 0.0)
+    else:
+        ER = 0
 
     return ER
 
@@ -142,6 +149,24 @@ def get_score(output, truth):
     er = er_all(output, truth)
 
     return f1, er
+
+def get_class_scores(output, truth):
+    # Empty array of class f scores and error rates
+    n_spec = len(dryad_process.speciesList)
+    class_fs = np.zeros(n_spec)
+    class_ers = np.zeros(n_spec)
+
+    # Iterate through species 
+    for i in range(n_spec):
+        classPred = output[i, :]
+        classTruth = truth[i, :]
+        
+        # Get score and er
+        f, er = get_score(classPred, classTruth)
+        class_fs[i] = f
+        class_ers[i] = er
+
+    return class_fs, class_ers
 
 def sed_eval_scores(pred, truth, labels): # Prediction and truth must be already reshaped and re-transposed
     # Transform to binary matrix Dataframe
@@ -166,6 +191,7 @@ def sed_eval_scores(pred, truth, labels): # Prediction and truth must be already
         time_resolution=1.0
     )
     t_collar = 5/truth.shape[1]
+    t_collar = 0.1
     event_based_metrics = sed_eval.sound_event.EventBasedMetrics(
         event_label_list=labels,
         t_collar=t_collar
@@ -194,9 +220,9 @@ def plotPredTruth(pred, pred_nothres, truth, labels):
     pred = from_annotMatrix_to_annotDF(pred, labels)
     truth = from_annotMatrix_to_annotDF(truth, labels)
     
-
+    display(pred)
     # Plot
-    plt.rcParams["figure.figsize"] = [11.50, 5.50]
+    plt.rcParams["figure.figsize"] = [15.50, 5.50]
     plt.rcParams["figure.autolayout"] = True
 
     fig, (ax1, ax2, ax3) = plt.subplots(ncols=3)
@@ -205,10 +231,16 @@ def plotPredTruth(pred, pred_nothres, truth, labels):
     ax3.set_title("Truth")
     fig.subplots_adjust(wspace=0.01)
 
-    temp_ticks = "auto"
-    sns.heatmap(pred_nothres, cmap="viridis", xticklabels=temp_ticks, yticklabels=labels, ax=ax1, cbar=False)
-    sns.heatmap(pred, cmap="viridis", xticklabels=temp_ticks, yticklabels=labels, ax=ax2, cbar=False)
-    sns.heatmap(truth, cmap="viridis", xticklabels=temp_ticks, yticklabels=labels, ax=ax3, cbar=False)
+    h1 =sns.heatmap(pred_nothres, cmap="viridis", yticklabels=labels, ax=ax1, cbar=False)
+    h2 = sns.heatmap(pred, cmap="viridis", yticklabels=labels, ax=ax2, cbar=False)
+    h3 = sns.heatmap(truth, cmap="viridis", yticklabels=labels, ax=ax3, cbar=False)
+    
+
+    ax1.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    ax2.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    ax3.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+
+    # ax1.locator_params(axis='x', nbins=20)
 
     fig.subplots_adjust(wspace=0.001)
     plt.show()

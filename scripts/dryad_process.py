@@ -74,7 +74,7 @@ def del_low_spec(t):
     removeSpec = []
     # print("Density list: ")
     for i in range(len(speciesCount)):
-        # print(orig_speciesList[i], " --> ", int(speciesCount[i]))
+        print(orig_speciesList[i], " --> ", int(speciesCount[i]))
         if(int(speciesCount[i]) < t):
             removeSpec.append(orig_speciesList[i])
     
@@ -412,18 +412,20 @@ def splitAudio(filePath, start_pts):
 ###############################################################################################################
 
 # Folders and paths 
-audioFold = "../data/dryad/audio/Recording_1/"
-audioFolds = ["../data/dryad/audio/Recording_1/", "../data/dryad/audio/Recording_2/", 
-                "../data/dryad/audio/Recording_3/","../data/dryad/audio/Recording_4/"]
+audioFolds = [
+              "../data/dryad/audio/Recording_1/",
+              "../data/dryad/audio/Recording_2/", 
+              "../data/dryad/audio/Recording_3/",
+              "../data/dryad/audio/Recording_4/"
+            ]
 
-annotFold = "../data/dryad/annotation/Recording_1/"
-annotFolds = ["../data/dryad/annotation/Recording_1/", "../data/dryad/annotation/Recording_2/", 
-                "../data/dryad/annotation/Recording_3/","../data/dryad/annotation/Recording_4/"]
+annotFolds = [
+              "../data/dryad/annotation/Recording_1/",
+              "../data/dryad/annotation/Recording_2/", 
+              "../data/dryad/annotation/Recording_3/",
+              "../data/dryad/annotation/Recording_4/"
+            ]
 
-audioList = os.listdir(audioFold)
-annotList = os.listdir(annotFold)
-audioList.sort()
-annotList.sort()
 
 # COMPLETE LIST OF SPECIES 
 orig_speciesList = ['AMCR', 'AMGO' , 'AMRE', 'AMRO', 'BAOR', 'BAWW', 'BBWA', 'BCCH', 'BGGN', 'BHCO', 'BHVI', 
@@ -436,6 +438,7 @@ orig_speciesList = ['AMCR', 'AMGO' , 'AMRE', 'AMRO', 'BAOR', 'BAWW', 'BBWA', 'BC
 time_thres = 100 # Minimum number of activations to be valid
 rmSpec = del_low_spec(time_thres)
 speciesList = purge_species()
+
 print("FINAL SPECIES LIST: ")
 print("ELIMINATED:", len(rmSpec))
 print(rmSpec)
@@ -453,13 +456,8 @@ hop_len = 512
 sr = 32000
 n_mels = 128
 
-# Generate features and annotations
-# a, b = separate_annot(getTXT_DF(annotFold+annotList[2]), clip_win, clip_hop)
-# print(getTXT_DF(annotFold+annotList[2]))
-# splitAudio(audioFold+audioList[2], b)
-
 # Create all clips and annotations from oiginal files
 audioAll, annotAll = get_all_annot_and_feat()
 # print("FINAL LENGTH: ", len(audioAll), len(annotAll))
-# feats, annots = generateDataset(100, 3)
+
 

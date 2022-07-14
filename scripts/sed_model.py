@@ -23,7 +23,7 @@ from tensorflow.keras.optimizers import schedules, Adam, SGD
 # Local imports 
 import processing
 import dryad_process
-from evaluation import f1_score_all, er_all, get_score, sed_eval_scores, plotPredTruth
+from evaluation import f1_score_all, er_all, get_score, sed_eval_scores, plotPredTruth, get_class_scores
 
 
 ########################################################################
@@ -105,8 +105,8 @@ def create_model(in_shape, out_shape):
     return model
 
 def train_model(model, X_train, X_test, y_train, y_test):
-    model.fit(X_train, y_train, batch_size=batch_size, epochs=epochs, validation_data=(X_test, y_test))
-
+    history = model.fit(X_train, y_train, batch_size=batch_size, epochs=epochs, validation_data=(X_test, y_test))
+    return history
 ########################################################################
 #                                 MAIN                                 # 
 ########################################################################
@@ -114,15 +114,16 @@ def train_model(model, X_train, X_test, y_train, y_test):
 ############################## PARAMETERS ##############################
 
 # Main values
-n_classes = 200
+n_classes = len(dryad_process.speciesList)
+classList = dryad_process.speciesList
 
-n_files = 20
-polyphony = 6
+n_files = 10000
+polyphony = 10
 
 threshold = 0.5 # To create binary output matrix
 
 #### Model params ####
-epochs = 120
+epochs = 100
 drop_rate = 0.5
 batch_size = 128 # Batch size
 
@@ -147,33 +148,40 @@ print("OUTPUT SIZE: ", y_train[0].shape)
 
 #### Create model // Load model ####
 model = create_model(in_shape, out_shape)
-model = load_model('dryad_day1_o6.h5')
+# model = load_model('dryad_day1_o6.h5')
 print(model.summary())
 
 # Train 
-# train_model(model, X_train, X_test, y_train, y_test)
+hist = train_model(model, X_train, X_test, y_train, y_test)
+
+print("Validation loss values: ", hist.history['val_loss'])
 
 # Save model
-# model.save('dryad_day1_o10.h5')  # HDF5 file 
+model.save('dryad_day2_o6.h5')  # HDF5 file 
 
 ###############################################
 
 # Prediction
 print("\nGenerating a prediction...")
+
 sedeval_f1_event = []
 sedeval_f1_seg = []
 sedeval_er_event = []
 sedeval_er_seg = []
+
 f1s = []
 ers = []
+
 f1s_o3 = []
 ers_o3 = []
 f1s_o6 = []
 ers_o6 = []
 f1s_o10 = []
 ers_o10 = []
+
 f1s_class = []
 ers_class = []
+
 cnt = 0
 for elem in X_test:
     elem = elem.reshape(1, in_shape[-3], in_shape[-2], in_shape[-1])
@@ -202,16 +210,13 @@ for elem in X_test:
         f1s_o10.append(f1)
         ers_o10.append(er)
 
-    # Species based score - UNCOMMNET FOR CLASS BASED METRICS (WIP)
-    # predBinClass = predBinary.T[10,:] #EATO row
-    # truthClass = y_test[cnt].T[10,:]
-
-    # f1_class, er_class = get_score(predBinClass, truthClass)
-
-    # f1s_class.append(f1_class)
-    # ers_class.append(er_class)
+    # Species based score
+    fclasses, erclasses = get_class_scores(predBinary.T, y_test[cnt].T)
+    f1s_class.append(fclasses)
+    ers_class.append(erclasses) 
+   
     # SED_EVAL library scores
-    scores = sed_eval_scores(predBinary.T, y_test[cnt].T, dryad_process.speciesList)
+    scores = sed_eval_scores(predBinary.T, y_test[cnt].T, classList)
     f1_ev = scores[0]['f_measure']['f_measure']
     er_ev = scores[0]['error_rate']['error_rate']
     f1_seg = scores[1]['f_measure']['f_measure']
@@ -223,34 +228,32 @@ for elem in X_test:
     sedeval_er_seg.append(er_seg)
 
     # PLOT PRED TRUTH FEATURE
-    # print("File with polyphony: ", ov)
-    # print("F1 and ER (manual): ", f1, er)
-    # print("F1 and ER sed_eval: ", f1_seg, er_seg)
+    print("File with polyphony: ", ov)
+    print("F1 and ER (manual): ", f1, er)
+    print("F1 and ER sed_eval: ", f1_seg, er_seg)
     # sns.heatmap(predNoThres.T, cbar=True)
-    # plotPredTruth(predBinary.T, predNoThres.T, y_test[cnt].T, dryad_process.speciesList)
+    plotPredTruth(predBinary.T, predNoThres.T, y_test[cnt].T, dryad_process.speciesList)
     cnt += 1
 
 print("\nF1s: ", f1s)
 print("ERs: ", ers)
-###### UNCOMMENT FOR METRICS OF 3, 6 and 10 polyphony
-# print("Mean F1 (3): ", np.mean(f1s_o3), np.std(f1s_o3))
-# print("Mean ER (3): ", np.mean(ers_o3), np.std(ers_o3))
-# print("Mean F1 (6): ", np.mean(f1s_o6), np.std(f1s_o6))
-# print("Mean ER (6): ", np.mean(ers_o6), np.std(ers_o6))
-# print("Mean F1 (10): ", np.mean(f1s_o10), np.std(f1s_o10))
-# print("Mean ER (10): ", np.mean(ers_o10), np.std(ers_o10))
-# print("Mean F1 (All): ", np.mean(f1s), np.std(f1s))
-# print("Mean ER (All): ", np.mean(ers), np.std(ers))
 
+print("Mean F1: ", np.mean(f1s), np.std(f1s))
+print("Mean ER: ", np.mean(ers), np.std(ers))
 
-##### UNCOMMENT FOR CLASS BASED METRICS 
-#### Change class 
-# print("CLASS BASED")
-# print("Mean F1 class: ", np.mean(f1s_class), np.std(f1s_class))
-# print("Mean ER class: ", np.mean(ers_class), np.std(ers_class))
+##### CLASS BASED METRICS 
+print("\nCLASS BASED METRICS: ")
 
+# Iterate for each file
+f1s_class = np.array(f1s_class)
+ers_class =np.array(ers_class)
+for j in range(len(f1s_class[0])):
+    print("SPECIES: ", classList[j])
+    print("F Score: ", np.mean(f1s_class[:, j]), " +- ", np.std(f1s_class[:, j]))
+    print("Error rate: ", np.mean(ers_class[:, j]), " +- ", np.std(ers_class[:, j]))
+    print("---------------------------------------------")
 #
-# print("SED EVAL VALUES SEGMENT BASED: ")
-# print("F1s: ", sedeval_f1_seg)
-# print("Mean F1: ", np.mean(sedeval_f1_seg), np.std(sedeval_f1_seg))
-# print("Mean ER: ", np.mean(sedeval_er_seg), np.std(sedeval_er_seg))
+print("SED EVAL VALUES SEGMENT BASED: ")
+print("F1s: ", sedeval_f1_seg)
+print("Mean F1: ", np.mean(sedeval_f1_seg), np.std(sedeval_f1_seg))
+print("Mean ER: ", np.mean(sedeval_er_seg), np.std(sedeval_er_seg))
