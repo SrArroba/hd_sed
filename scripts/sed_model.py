@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 from IPython.display import display
 import numpy as np
@@ -31,8 +32,6 @@ from evaluation import f1_score_all, er_all, get_score, sed_eval_scores, plotPre
 ########################################################################
 def generate_sets(n_files, polyphony):
     # Generate entire dataset
-    # train_x, train_y = processing.generateDataset(n_files, polyphony)
-    # print("NIPS: ", train_x.ndim, train_x[0].shape, type(train_x[0]), train_x[0].ndim, train_y[0].shape, type(train_y[0]), train_y[0].ndim)
     train_x, train_y = dryad_process.generateDataset(n_files, polyphony)
 
     # Separate into validation and training sets
@@ -44,22 +43,16 @@ def generate_sets(n_files, polyphony):
     return X_train, X_test, y_train, y_test
 
 def preprocess(X_train, X_test, y_train, y_test):
+    # To numpy
     X_train = np.array([np.array(val, dtype='float') for val in X_train])
     y_train = np.array([np.array(val, dtype='float') for val in y_train])
     X_test = np.array([np.array(val, dtype='float') for val in X_test])
     y_test = np.array([np.array(val, dtype='float') for val in y_test])
-
-    # for i in range(len(X_train)):
-    #     print("TRAIN: ", X_train[i].shape, type(X_train[i]), " --> ", y_train[i].shape, type(y_train[i]))
-
+   
     # Reshape sets: (length of set, frames, mels, 1)
     X_train = X_train.reshape(len(X_train), X_train[0].shape[0], X_train[0].shape[1], 1)
     X_test = X_test.reshape(len(X_test), X_train[0].shape[0], X_train[0].shape[1], 1)
-    # Change output to categorical
-    #print(y_train[0].shape)
-    # y_train = to_categorical(y_train)
-    # y_test = to_categorical(y_test)
-
+    
     return X_train, X_test, y_train, y_test
 
 def create_model(in_shape, out_shape):
@@ -114,18 +107,19 @@ def train_model(model, X_train, X_test, y_train, y_test):
 ############################## PARAMETERS ##############################
 
 # Main values
-n_classes = len(dryad_process.speciesList)
+mode = sys.argv[1] # 'train' or 'test'
+n_files = int(sys.argv[2])
+polyphony = int(sys.argv[3])
+
 classList = dryad_process.speciesList
-
-n_files = 10000
-polyphony = 10
-
-threshold = 0.5 # To create binary output matrix
+n_classes = len(classList)
 
 #### Model params ####
 epochs = 100
 drop_rate = 0.5
 batch_size = 128 # Batch size
+
+threshold = 0.5 # To create binary output matrix
 
 # Convolutional params 
 filt_list = [64, 128, 128, 128, 256]
@@ -144,20 +138,27 @@ out_shape = y_train[0].shape
 print("\nINPUT SIZE: ", X_train[0].shape)
 print("OUTPUT SIZE: ", y_train[0].shape)
 
-###############################################
+##########################
 
-#### Create model // Load model ####
-model = create_model(in_shape, out_shape)
-# model = load_model('dryad_day1_o6.h5')
-print(model.summary())
+#### Create model (train) // Load model (test) ####
 
-# Train 
-hist = train_model(model, X_train, X_test, y_train, y_test)
+if mode == "train":
+    model = create_model(in_shape, out_shape)
+    # model = load_model('dryad_day1_o6.h5')
+    print(model.summary())
 
-print("Validation loss values: ", hist.history['val_loss'])
+    # Train 
+    hist = train_model(model, X_train, X_test, y_train, y_test)
 
-# Save model
-model.save('dryad_day2_o6.h5')  # HDF5 file 
+    # Save model
+    model.save('new_model.h5')  # HDF5 file
+
+elif mode == "test":
+    model_name = sys.argv[4] 
+    # Load model
+    model = load_model(str(model_name))
+    print(model.summary())
+
 
 ###############################################
 
@@ -229,10 +230,11 @@ for elem in X_test:
 
     # PLOT PRED TRUTH FEATURE
     print("File with polyphony: ", ov)
-    print("F1 and ER (manual): ", f1, er)
-    print("F1 and ER sed_eval: ", f1_seg, er_seg)
-    # sns.heatmap(predNoThres.T, cbar=True)
-    plotPredTruth(predBinary.T, predNoThres.T, y_test[cnt].T, dryad_process.speciesList)
+    print("F1 and ER: ", f1, er)
+    #print("F1 and ER sed_eval: ", f1_seg, er_seg)
+    
+    ### UNCOMMENT TO SHOW PLOTS
+    #plotPredTruth(predBinary.T, predNoThres.T, y_test[cnt].T, dryad_process.speciesList)
     cnt += 1
 
 print("\nF1s: ", f1s)
@@ -240,20 +242,3 @@ print("ERs: ", ers)
 
 print("Mean F1: ", np.mean(f1s), np.std(f1s))
 print("Mean ER: ", np.mean(ers), np.std(ers))
-
-##### CLASS BASED METRICS 
-print("\nCLASS BASED METRICS: ")
-
-# Iterate for each file
-f1s_class = np.array(f1s_class)
-ers_class =np.array(ers_class)
-for j in range(len(f1s_class[0])):
-    print("SPECIES: ", classList[j])
-    print("F Score: ", np.mean(f1s_class[:, j]), " +- ", np.std(f1s_class[:, j]))
-    print("Error rate: ", np.mean(ers_class[:, j]), " +- ", np.std(ers_class[:, j]))
-    print("---------------------------------------------")
-#
-print("SED EVAL VALUES SEGMENT BASED: ")
-print("F1s: ", sedeval_f1_seg)
-print("Mean F1: ", np.mean(sedeval_f1_seg), np.std(sedeval_f1_seg))
-print("Mean ER: ", np.mean(sedeval_er_seg), np.std(sedeval_er_seg))

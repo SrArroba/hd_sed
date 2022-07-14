@@ -67,14 +67,10 @@ def del_low_spec(t):
                 for line in lines:
                     spc = line[-5:].replace("\n", "")
                     speciesCount[orig_speciesList.index(spc)] += 1
-    # print("Mean number of activations in the files: ", np.mean(n_activ))
-    # print("Total number of activations: ", int(np.sum(speciesCount))) 
     
     # Return a species with less than t activations
     removeSpec = []
-    # print("Density list: ")
     for i in range(len(speciesCount)):
-        print(orig_speciesList[i], " --> ", int(speciesCount[i]))
         if(int(speciesCount[i]) < t):
             removeSpec.append(orig_speciesList[i])
     
@@ -107,12 +103,6 @@ def generateDataset(n_files, polyphony):
         if(finalOv <= polyphony): # Take only files with less or equal polyphony as desired
             count += 1
             print("Generating dataset: {} out of {} ({} %)".format(count, n_files, (100*count/n_files)), end='\r')
-
-            ##### PRINTS #####
-            # plotSpec_and_Annot(feat, inputMatrix)
-            # plotSpec(feat)
-            # play(toPlay)
-            # toPlay.export("./samples/testing.wav", format="wav")
 
             ##### NORMALIZE FEATURE #####
             feat = normalize_data(feat.T)
@@ -199,10 +189,7 @@ def getInputMatrix(df, n_seps):
         
         # Concatenate original matrix with the submatrix of 0s
         mat = np.concatenate((mat, matZeros), axis=1)
-
-    # Print info (can be commented)
-    # print(mat, " (", mat.shape, ")", type(mat))
-    
+ 
     return mat
 
 def getMelSpectrogram(audioSegment):
@@ -325,11 +312,6 @@ def separate_annot(dataframe, clip_win, clip_hop):
             df_list.append(mini_df)
             df_red_list.append(red_df)
             valid_starts.append(start_pts[sec_id])
-            
-            # print("\nMINIDF in ", start_pts[sec_id], " to ", end_pts[sec_id])
-            # print(mini_df)
-            # print("-----")
-            # print(red_df)
 
     valid_starts.sort()
     return df_red_list, valid_starts
@@ -396,18 +378,9 @@ def splitAudio(filePath, start_pts):
 
         clip = audio[t1:t2]
         
-        # Obtain feature (e.g. spectrogram)
-        #feat = getMelSpectrogram(clip)
-        
-        # plotSpec(feat)
-        # print(feat.shape)
-        
         feats.append(clip)
 
     return feats
-    # test1.export(audioFolds[2]+'test1.wav', format="wav")
-    # test2.export(audioFolds[2]+'test2.wav', format="wav")
-
     
 ###############################################################################################################
 
@@ -439,12 +412,6 @@ time_thres = 100 # Minimum number of activations to be valid
 rmSpec = del_low_spec(time_thres)
 speciesList = purge_species()
 
-print("FINAL SPECIES LIST: ")
-print("ELIMINATED:", len(rmSpec))
-print(rmSpec)
-print("REMAINING: ", len(speciesList))
-print(speciesList)
-
 # Audio length properties
 dur = 300 # In seconds (=5min)
 clip_win = 5
@@ -458,6 +425,5 @@ n_mels = 128
 
 # Create all clips and annotations from oiginal files
 audioAll, annotAll = get_all_annot_and_feat()
-# print("FINAL LENGTH: ", len(audioAll), len(annotAll))
 
 
