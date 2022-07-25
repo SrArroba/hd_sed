@@ -106,15 +106,15 @@ def train_model(model, X_train, X_test, y_train, y_test):
 
 ############################## PARAMETERS ##############################
 
-# Main values
-mode = sys.argv[1] # 'train' or 'test'
-n_files = int(sys.argv[2])
-polyphony = int(sys.argv[3])
+# Main values ----- Command based 
+mode = sys.argv[1]              # Options: 'train' or 'test'
+n_files = int(sys.argv[2])      # Files for training and testing
+polyphony = int(sys.argv[3])    # Maximum polyphony of the files 
 
 classList = dryad_process.speciesList
 n_classes = len(classList)
 
-#### Model params ####
+###################### MODEL params ######################
 epochs = 100
 drop_rate = 0.5
 batch_size = 128 # Batch size
@@ -128,9 +128,9 @@ pool_list = [5, 2, 2, 2, 2]
 rnn_nodes = [128, 128]
 # FC 
 hid_nodes = [128, 128]
-########################################################################
+###########################################################
 
-#### Sets separation ####
+##################### Sets separation #####################
 X_train, X_test, y_train, y_test = generate_sets(n_files, polyphony)
 
 in_shape = X_train[0].shape
@@ -138,7 +138,7 @@ out_shape = y_train[0].shape
 print("\nINPUT SIZE: ", X_train[0].shape)
 print("OUTPUT SIZE: ", y_train[0].shape)
 
-##########################
+###########################################################
 
 #### Create model (train) // Load model (test) ####
 
@@ -151,7 +151,7 @@ if mode == "train":
     hist = train_model(model, X_train, X_test, y_train, y_test)
 
     # Save model
-    model.save('new_model.h5')  # HDF5 file
+    model.save(str(sys.argv[4]))  # HDF5 file
 
 elif mode == "test":
     model_name = sys.argv[4] 
@@ -160,7 +160,7 @@ elif mode == "test":
     print(model.summary())
 
 
-###############################################
+####################################################
 
 # Prediction
 print("\nGenerating a prediction...")
